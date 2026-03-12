@@ -110,9 +110,14 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     comdlg32
 )
 
+target_compile_definitions(${PROJECT_NAME} PRIVATE
+    TOPFRAME_DEFAULT_AMGX_CONFIG_REL="configs/amgx/default.json"
+)
+
 if(TOPFRAME_ENABLE_AMGX)
     set(AMGX_ROOT "$ENV{AMGX_ROOT}" CACHE PATH "Path to AmgX installation root")
     if(AMGX_ROOT AND EXISTS "${AMGX_ROOT}/include")
+        find_package(CUDAToolkit REQUIRED)
         target_include_directories(${PROJECT_NAME} PRIVATE "${AMGX_ROOT}/include")
 
         if(EXISTS "${AMGX_ROOT}/lib")
@@ -126,7 +131,16 @@ if(TOPFRAME_ENABLE_AMGX)
         )
 
         if(AMGX_LIBRARY)
-            target_link_libraries(${PROJECT_NAME} PRIVATE ${AMGX_LIBRARY})
+            find_file(AMGX_DLL
+                NAMES amgxsh.dll amgx.dll
+                PATHS "${AMGX_ROOT}/bin" "${AMGX_ROOT}/lib" "${AMGX_ROOT}/lib/x64"
+                NO_DEFAULT_PATH
+            )
+
+            target_link_libraries(${PROJECT_NAME} PRIVATE
+                ${AMGX_LIBRARY}
+                CUDA::cudart
+            )
             target_compile_definitions(${PROJECT_NAME} PRIVATE TOPFRAME_ENABLE_AMGX=1)
             message(STATUS "AmgX enabled: ${AMGX_LIBRARY}")
         else()
@@ -137,11 +151,21 @@ if(TOPFRAME_ENABLE_AMGX)
     endif()
 endif()
 
-# Copy resources if any
-# add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-#     COMMAND ${CMAKE_COMMAND} -E copy_directory
-#     ${CMAKE_SOURCE_DIR}/resources $<TARGET_FILE_DIR:${PROJECT_NAME}>/resources
-# )
+if(EXISTS "${CMAKE_SOURCE_DIR}/configs")
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/configs"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/configs"
+    )
+endif()
+
+if(AMGX_DLL)
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${AMGX_DLL}"
+        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
+    )
+endif()
 
 message(STATUS "=== TopOptFrameC configured ===")
 message(STATUS "  Build type : ${CMAKE_BUILD_TYPE}")

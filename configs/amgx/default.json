@@ -1,0 +1,24 @@
+{
+  "config_version": 2,
+  "solver": {
+    "solver": "PCG",
+    "print_solve_stats": 0,
+    "monitor_residual": 1,
+    "store_res_history": 0,
+    "convergence": "RELATIVE_INI_CORE",
+    "max_iters": 1000,
+    "tolerance": 1e-6,
+    "preconditioner": {
+      "solver": "AMG",
+      "algorithm": "AGGREGATION",
+      "selector": "SIZE_2",
+      "max_levels": 100,
+      "cycle": "V",
+      "smoother": "JACOBI_L1",
+      "presweeps": 1,
+      "postsweeps": 1,
+      "max_iters": 1,
+      "tolerance": 0.0
+    }
+  }
+}
