@@ -18,6 +18,51 @@
 
 namespace TopOpt {
 
+namespace {
+
+SolverBackend solverBackendFromParam(const ParamDef* param) {
+    int idx = param ? param->enumIndex : 0;
+    if (idx == 1) return SolverBackend::CPU;
+    if (idx == 2) return SolverBackend::GPU_AmgX;
+    return SolverBackend::Auto;
+}
+
+FESolverConfig readSolverConfig(GraphExecutor* exec, int nodeId) {
+    FESolverConfig cfg;
+    cfg.backend = solverBackendFromParam(exec->findParam(nodeId, "Backend"));
+    const ParamDef* pGpu = exec->findParam(nodeId, "EnableGPU");
+    const ParamDef* pFallback = exec->findParam(nodeId, "FallbackToCPU");
+    const ParamDef* pMaxIter = exec->findParam(nodeId, "SolverMaxIter");
+    if (!pMaxIter) pMaxIter = exec->findParam(nodeId, "MaxIter");
+    const ParamDef* pTol = exec->findParam(nodeId, "SolverTol");
+    if (!pTol) pTol = exec->findParam(nodeId, "Tol");
+    const ParamDef* pAmgx = exec->findParam(nodeId, "AmgXPath");
+
+    cfg.gpuEnabled = pGpu ? pGpu->boolVal : true;
+    cfg.fallbackToCpu = pFallback ? pFallback->boolVal : true;
+    cfg.maxIterations = pMaxIter ? pMaxIter->intVal : 1000;
+    cfg.tolerance = pTol ? (double)pTol->floatVal : 1e-6;
+    cfg.amgxConfigPath = pAmgx ? pAmgx->stringVal : "";
+    return cfg;
+}
+
+std::string solverSummary(const FEResultData& result) {
+    std::ostringstream os;
+    os << "backend=" << result.backendUsed
+       << ", compliance=" << result.compliance
+       << ", timeMs=" << result.solveTimeMs
+       << ", residual=" << result.residualNorm;
+    if (result.usedFallback) {
+        os << ", fallback=true";
+    }
+    if (!result.solverMessage.empty()) {
+        os << ", msg=" << result.solverMessage;
+    }
+    return os.str();
+}
+
+} // namespace
+
 GraphExecutor::GraphExecutor() {}
 GraphExecutor::~GraphExecutor() {}
 
@@ -859,13 +904,13 @@ void GraphExecutor::evalFEASolver(int nodeId) {
     solver.setMesh(mesh);
     solver.setMaterial(mat);
     solver.setLoadCase(loadCases[0]);
+    solver.setConfig(readSolverConfig(this, nodeId));
 
     bool ok = solver.solve();
     if (ok) {
-        Logger::instance().info("[Exec] FEA Solver: converged, compliance=" +
-                                std::to_string(solver.result().compliance));
+        Logger::instance().info("[Exec] FEA Solver: converged, " + solverSummary(solver.result()));
     } else {
-        Logger::instance().error("[Exec] FEA Solver: failed to converge");
+        Logger::instance().error("[Exec] FEA Solver: failed, " + solverSummary(solver.result()));
     }
 
     outputData_[{nodeId, 0}] = NodeData::makeFEResult(solver.result());
@@ -919,6 +964,7 @@ void GraphExecutor::evalTopoSIMP(int nodeId) {
     opt.setMesh(inMesh.asFEMesh());
     opt.setMaterial(inMat.asMaterial());
     opt.setLoadCases(loadCases);
+    opt.setSolverConfig(readSolverConfig(this, nodeId));
 
     Logger::instance().info("[Exec] SIMP: starting optimization (volFrac=" +
                             std::to_string(opt.volFrac) + ", penalty=" +
@@ -931,9 +977,10 @@ void GraphExecutor::evalTopoSIMP(int nodeId) {
         auto& dr = opt.densityResult();
         Logger::instance().info("[Exec] SIMP: completed in " + std::to_string(dr.iteration) +
                                 " iterations, final volFrac=" + std::to_string(dr.volFrac) +
-                                ", objective=" + std::to_string(dr.objective));
+                                ", objective=" + std::to_string(dr.objective) +
+                                ", " + solverSummary(opt.feResult()));
     } else {
-        Logger::instance().error("[Exec] SIMP: optimization failed");
+        Logger::instance().error("[Exec] SIMP: optimization failed, " + solverSummary(opt.feResult()));
     }
 
     outputData_[{nodeId, 0}] = NodeData::makeDensityField(opt.densityResult());
@@ -981,15 +1028,17 @@ void GraphExecutor::evalTopoBESO(int nodeId) {
     opt.setMesh(inMesh.asFEMesh());
     opt.setMaterial(inMat.asMaterial());
     opt.setLoadCases(loadCases);
+    opt.setSolverConfig(readSolverConfig(this, nodeId));
 
     Logger::instance().info("[Exec] BESO (SIMP fallback): starting...");
     bool ok = opt.runSIMP();
 
     if (ok) {
         Logger::instance().info("[Exec] BESO: completed, " +
-                                std::to_string(opt.densityResult().iteration) + " iterations");
+                                std::to_string(opt.densityResult().iteration) + " iterations, " +
+                                solverSummary(opt.feResult()));
     } else {
-        Logger::instance().error("[Exec] BESO: failed");
+        Logger::instance().error("[Exec] BESO: failed, " + solverSummary(opt.feResult()));
     }
 
     outputData_[{nodeId, 0}] = NodeData::makeDensityField(opt.densityResult());

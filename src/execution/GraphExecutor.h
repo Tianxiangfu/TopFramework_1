@@ -37,6 +37,9 @@ public:
     // Live preview: evaluate a node and its upstream deps, push result to View3D
     void previewNode(int nodeId);
 
+    // Helper: find param by name on a node
+    const ParamDef* findParam(int nodeId, const std::string& name);
+
 private:
     // Build topological order (Kahn's algorithm), returns false if cycle detected
     bool buildExecutionOrder(std::vector<int>& order);
@@ -107,9 +110,6 @@ private:
     std::vector<Triangle3D> generateSphere(int resolution);
     std::vector<Triangle3D> generateCylinder(int resolution);
     std::vector<Triangle3D> generatePlane(int resolution);
-
-    // Helper: find param by name on a node
-    const ParamDef* findParam(int nodeId, const std::string& name);
 
     NodeEditor*  editor_ = nullptr;
     View3DPanel* view3D_ = nullptr;

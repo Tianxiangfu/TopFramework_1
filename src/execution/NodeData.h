@@ -56,11 +56,32 @@ struct LoadCaseData {
     double weight = 1.0;
 };
 
+enum class SolverBackend {
+    Auto = 0,
+    CPU = 1,
+    GPU_AmgX = 2
+};
+
+struct FESolverConfig {
+    SolverBackend backend = SolverBackend::Auto;
+    bool gpuEnabled = true;
+    bool fallbackToCpu = true;
+    int maxIterations = 1000;
+    double tolerance = 1e-6;
+    std::string amgxConfigPath;
+};
+
 struct FEResultData {
     std::vector<double> dispX, dispY, dispZ; // per node
     std::vector<double> vonMises, strainEnergy; // per element
     double compliance = 0;
     bool converged = false;
+    std::string backendUsed = "cpu-direct";
+    int iterationCount = 0;
+    double solveTimeMs = 0.0;
+    bool usedFallback = false;
+    double residualNorm = 0.0;
+    std::string solverMessage;
 };
 
 struct DensityFieldData {
@@ -180,7 +201,8 @@ public:
         if (isFEResult()) {
             auto& r = asFEResult();
             return "FEResult(compliance=" + std::to_string(r.compliance) +
-                   ", converged=" + (r.converged ? "true" : "false") + ")";
+                   ", converged=" + (r.converged ? "true" : "false") +
+                   ", backend=" + r.backendUsed + ")";
         }
         if (isDensityField()) {
             auto& d = asDensityField();

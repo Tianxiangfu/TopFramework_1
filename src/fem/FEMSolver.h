@@ -2,9 +2,17 @@
 #include "../execution/NodeData.h"
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
+#include <memory>
 #include <vector>
 
 namespace TopOpt {
+
+class FEMSolverBackend {
+public:
+    virtual ~FEMSolverBackend() = default;
+    virtual bool solve(class FEMSolver& solver, FEResultData& result) = 0;
+    virtual const char* name() const = 0;
+};
 
 class FEMSolver {
 public:
@@ -14,6 +22,8 @@ public:
     void setMesh(const FEMeshData& mesh);
     void setMaterial(const MaterialData& mat);
     void setLoadCase(const LoadCaseData& lc);
+    void setConfig(const FESolverConfig& config) { config_ = config; }
+    const FESolverConfig& config() const { return config_; }
 
     // Optional: per-element density for SIMP (default all 1.0)
     void setDensities(const std::vector<double>& densities, double penalty = 3.0, double Emin = 1e-9);
@@ -30,11 +40,18 @@ public:
     // Access assembled system (for sensitivity analysis)
     int numDofs() const { return numDofs_; }
     const Eigen::VectorXd& displacement() const { return U_; }
+    const FEMeshData& mesh() const { return mesh_; }
+    const MaterialData& material() const { return mat_; }
+    const LoadCaseData& loadCase() const { return loadCase_; }
 
     // Element displacement vector for element elemIdx
     Eigen::Matrix<double, 24, 1> elementDisp(int elemIdx) const;
+    double elementStrainEnergyFromReferenceKe(int elemIdx) const;
 
 private:
+    friend class CpuEigenSolverBackend;
+    friend class GpuAmgXSolverBackend;
+
     // Hex8 shape functions and derivatives at a gauss point
     struct ShapeEval {
         double N[8];
@@ -52,13 +69,21 @@ private:
 
     // Assemble global stiffness
     void assembleGlobal();
+    double densityScaleForElement(int elemIdx) const;
+    void rebuildCachesIfNeeded();
+    bool solveWithConfiguredBackend();
+    void computeResults();
 
     // Apply boundary conditions
     void applyBCs();
 
+    bool hasRegularHexMesh() const;
+    bool sameMeshTopology(const FEMeshData& other) const;
+
     FEMeshData mesh_;
     MaterialData mat_;
     LoadCaseData loadCase_;
+    FESolverConfig config_;
 
     // Per-element density (for SIMP)
     std::vector<double> densities_;
@@ -71,6 +96,11 @@ private:
     Eigen::VectorXd F_;
     Eigen::VectorXd U_;
     FEResultData result_;
+    Eigen::Matrix<double, 6, 6> D_;
+
+    std::vector<Eigen::Matrix<double, 24, 24>> keCache_;
+    bool keCacheValid_ = false;
+    FEMeshData cachedMesh_;
 
     // DOF mapping: node i -> dofs 3*i, 3*i+1, 3*i+2
     // Constrained DOFs

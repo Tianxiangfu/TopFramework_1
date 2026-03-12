@@ -33,6 +33,27 @@ void TopOptSolver::computeElementCenters() {
     }
 }
 
+void TopOptSolver::buildFilterNeighborhood() {
+    int nElem = (int)mesh_.elements.size();
+    filterNeighbors_.assign(nElem, {});
+    double rmin = filterRadius;
+    double rmin2 = rmin * rmin;
+
+    for (int i = 0; i < nElem; i++) {
+        auto& neighbors = filterNeighbors_[i];
+        for (int j = 0; j < nElem; j++) {
+            double dx = elemCenterX_[i] - elemCenterX_[j];
+            double dy = elemCenterY_[i] - elemCenterY_[j];
+            double dz = elemCenterZ_[i] - elemCenterZ_[j];
+            double dist2 = dx*dx + dy*dy + dz*dz;
+            if (dist2 < rmin2) {
+                double dist = std::sqrt(dist2);
+                neighbors.emplace_back(j, rmin - dist);
+            }
+        }
+    }
+}
+
 // ================================================================
 //  Density filter (sphere-weighted average)
 // ================================================================
@@ -41,20 +62,12 @@ void TopOptSolver::applyDensityFilter(std::vector<double>& filtered,
                                        const std::vector<double>& raw) {
     int nElem = (int)raw.size();
     filtered.resize(nElem);
-    double rmin = filterRadius;
 
     for (int i = 0; i < nElem; i++) {
         double sumW = 0, sumWx = 0;
-        for (int j = 0; j < nElem; j++) {
-            double dx = elemCenterX_[i] - elemCenterX_[j];
-            double dy = elemCenterY_[i] - elemCenterY_[j];
-            double dz = elemCenterZ_[i] - elemCenterZ_[j];
-            double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (dist < rmin) {
-                double w = rmin - dist;
-                sumW  += w;
-                sumWx += w * raw[j];
-            }
+        for (const auto& [j, w] : filterNeighbors_[i]) {
+            sumW  += w;
+            sumWx += w * raw[j];
         }
         filtered[i] = (sumW > 0) ? sumWx / sumW : raw[i];
     }
@@ -68,20 +81,12 @@ void TopOptSolver::applySensitivityFilter(std::vector<double>& dc,
                                            const std::vector<double>& x) {
     int nElem = (int)dc.size();
     std::vector<double> dcOrig = dc;
-    double rmin = filterRadius;
 
     for (int i = 0; i < nElem; i++) {
         double sumW = 0, sumWdc = 0;
-        for (int j = 0; j < nElem; j++) {
-            double dx = elemCenterX_[i] - elemCenterX_[j];
-            double dy = elemCenterY_[i] - elemCenterY_[j];
-            double dz = elemCenterZ_[i] - elemCenterZ_[j];
-            double dist = std::sqrt(dx*dx + dy*dy + dz*dz);
-            if (dist < rmin) {
-                double w = rmin - dist;
-                sumW   += w;
-                sumWdc += w * x[j] * dcOrig[j];
-            }
+        for (const auto& [j, w] : filterNeighbors_[i]) {
+            sumW   += w;
+            sumWdc += w * x[j] * dcOrig[j];
         }
         if (sumW > 0 && x[i] > 0) {
             dc[i] = sumWdc / (x[i] * sumW);
@@ -142,16 +147,25 @@ bool TopOptSolver::runSIMP() {
 
     int nElem = (int)mesh_.elements.size();
     computeElementCenters();
+    buildFilterNeighborhood();
 
     // Initialize densities
     std::vector<double> x(nElem, volFrac);
+    std::vector<char> passiveSolidMask(nElem, 0);
+    std::vector<char> passiveVoidMask(nElem, 0);
 
     // Set passive regions
     for (int eid : mesh_.passiveSolid) {
-        if (eid >= 0 && eid < nElem) x[eid] = 1.0;
+        if (eid >= 0 && eid < nElem) {
+            x[eid] = 1.0;
+            passiveSolidMask[eid] = 1;
+        }
     }
     for (int eid : mesh_.passiveVoid) {
-        if (eid >= 0 && eid < nElem) x[eid] = minDensity;
+        if (eid >= 0 && eid < nElem) {
+            x[eid] = minDensity;
+            passiveVoidMask[eid] = 1;
+        }
     }
 
     densityResult_.history.clear();
@@ -159,8 +173,7 @@ bool TopOptSolver::runSIMP() {
     FEMSolver solver;
     solver.setMesh(mesh_);
     solver.setMaterial(mat_);
-
-    double prevObj = 1e30;
+    solver.setConfig(solverConfig_);
 
     for (int iter = 0; iter < maxIter; iter++) {
         // Set densities and solve for each load case
@@ -181,19 +194,8 @@ bool TopOptSolver::runSIMP() {
 
             // Sensitivity: dc/dx = -p * x^(p-1) * ue^T * K0e * ue
             for (int e = 0; e < nElem; e++) {
-                auto ue = solver.elementDisp(e);
-                auto Ke0 = solver.hex8Ke(e);
-                double ce = ue.transpose() * Ke0 * ue;
-
-                // Skip passive regions
-                bool isPassiveSolid = false, isPassiveVoid = false;
-                for (int pid : mesh_.passiveSolid) {
-                    if (pid == e) { isPassiveSolid = true; break; }
-                }
-                for (int pid : mesh_.passiveVoid) {
-                    if (pid == e) { isPassiveVoid = true; break; }
-                }
-                if (isPassiveSolid || isPassiveVoid) continue;
+                double ce = solver.elementStrainEnergyFromReferenceKe(e);
+                if (passiveSolidMask[e] || passiveVoidMask[e]) continue;
 
                 dc[e] += lc.weight * (-penalty * std::pow(x[e], penalty - 1.0) * ce);
             }
@@ -238,7 +240,6 @@ bool TopOptSolver::runSIMP() {
         if (iter > 10 && change < tolConverge) {
             break;
         }
-        prevObj = totalCompliance;
     }
 
     // Store final results

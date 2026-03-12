@@ -312,8 +312,12 @@ void NodeRegistry::registerBuiltinTypes() {
             { "femesh", "FEMesh", PortDataType::FEMesh }
         },
         {
+            { "Backend", ParamType::Enum, 0.f, 0, false, "", 0, {"Auto","CPU Direct","GPU AmgX"} },
+            { "EnableGPU", ParamType::Bool, 0.f, 0, true },
+            { "FallbackToCPU", ParamType::Bool, 0.f, 0, true },
             { "MaxIter", ParamType::Int, 0.f, 1000 },
-            { "Tol",     ParamType::Float, 1e-6f, 0, false, "", 0, {}, {}, 1e-12f, 1.f, 1e-6f }
+            { "Tol",     ParamType::Float, 1e-6f, 0, false, "", 0, {}, {}, 1e-12f, 1.f, 1e-6f },
+            { "AmgXPath", ParamType::String, 0.f, 0, false, "" }
         }
     });
 
@@ -334,13 +338,19 @@ void NodeRegistry::registerBuiltinTypes() {
             { "result",  "Result",  PortDataType::FEResult }
         },
         {
+            { "Backend",    ParamType::Enum, 0.f, 0, false, "", 0, {"Auto","CPU Direct","GPU AmgX"} },
+            { "EnableGPU",  ParamType::Bool, 0.f, 0, true },
+            { "FallbackToCPU", ParamType::Bool, 0.f, 0, true },
             { "VolFrac",    ParamType::Float, 0.5f,  0, false, "", 0, {}, {}, 0.01f, 0.99f, 0.01f },
             { "Penalty",    ParamType::Float, 3.0f,  0, false, "", 0, {}, {}, 1.f, 5.f, 0.5f },
             { "FilterR",    ParamType::Float, 1.5f,  0, false, "", 0, {}, {}, 0.1f, 50.f, 0.1f },
             { "FilterType", ParamType::Enum,  0.f, 0, false, "", 0, {"Density","Sensitivity"} },
             { "MaxIter",    ParamType::Int,   0.f, 200, false, "", 0, {}, {}, 1.f, 2000.f, 1.f },
             { "MinDensity", ParamType::Float, 0.001f, 0, false, "", 0, {}, {}, 1e-6f, 0.1f, 0.001f },
-            { "Objective",  ParamType::Enum,  0.f, 0, false, "", 0, {"MinCompliance"} }
+            { "SolverMaxIter", ParamType::Int, 0.f, 1000, false, "", 0, {}, {}, 1.f, 10000.f, 10.f },
+            { "SolverTol",  ParamType::Float, 1e-6f, 0, false, "", 0, {}, {}, 1e-12f, 1.f, 1e-6f },
+            { "Objective",  ParamType::Enum,  0.f, 0, false, "", 0, {"MinCompliance"} },
+            { "AmgXPath",   ParamType::String, 0.f, 0, false, "" }
         }
     });
 
@@ -358,10 +368,16 @@ void NodeRegistry::registerBuiltinTypes() {
             { "result",  "Result",  PortDataType::FEResult }
         },
         {
+            { "Backend",       ParamType::Enum, 0.f, 0, false, "", 0, {"Auto","CPU Direct","GPU AmgX"} },
+            { "EnableGPU",     ParamType::Bool, 0.f, 0, true },
+            { "FallbackToCPU", ParamType::Bool, 0.f, 0, true },
             { "VolFrac",       ParamType::Float, 0.5f,  0, false, "", 0, {}, {}, 0.01f, 0.99f, 0.01f },
             { "EvolutionRate", ParamType::Float, 0.02f, 0, false, "", 0, {}, {}, 0.001f, 0.1f, 0.005f },
             { "FilterR",       ParamType::Float, 1.5f,  0, false, "", 0, {}, {}, 0.1f, 50.f, 0.1f },
-            { "MaxIter",       ParamType::Int,   0.f, 200, false, "", 0, {}, {}, 1.f, 2000.f, 1.f }
+            { "MaxIter",       ParamType::Int,   0.f, 200, false, "", 0, {}, {}, 1.f, 2000.f, 1.f },
+            { "SolverMaxIter", ParamType::Int, 0.f, 1000, false, "", 0, {}, {}, 1.f, 10000.f, 10.f },
+            { "SolverTol",     ParamType::Float, 1e-6f, 0, false, "", 0, {}, {}, 1e-12f, 1.f, 1e-6f },
+            { "AmgXPath",      ParamType::String, 0.f, 0, false, "" }
         }
     });
 

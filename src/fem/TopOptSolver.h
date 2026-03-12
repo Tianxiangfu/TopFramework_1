@@ -3,6 +3,7 @@
 #include "FEMSolver.h"
 #include <vector>
 #include <functional>
+#include <utility>
 
 namespace TopOpt {
 
@@ -21,6 +22,7 @@ public:
     void setMesh(const FEMeshData& mesh);
     void setMaterial(const MaterialData& mat);
     void setLoadCases(const std::vector<LoadCaseData>& loadCases);
+    void setSolverConfig(const FESolverConfig& config) { solverConfig_ = config; }
 
     // Run SIMP optimization
     bool runSIMP();
@@ -41,13 +43,16 @@ private:
 
     // Compute element centers for filtering
     void computeElementCenters();
+    void buildFilterNeighborhood();
 
     FEMeshData mesh_;
     MaterialData mat_;
     std::vector<LoadCaseData> loadCases_;
+    FESolverConfig solverConfig_;
 
     // Element centers (for filter distance)
     std::vector<double> elemCenterX_, elemCenterY_, elemCenterZ_;
+    std::vector<std::vector<std::pair<int, double>>> filterNeighbors_;
 
     DensityFieldData densityResult_;
     FEResultData feResult_;

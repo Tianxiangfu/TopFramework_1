@@ -3,6 +3,7 @@ project(TopOptFrameC VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+option(TOPFRAME_ENABLE_AMGX "Enable NVIDIA AmgX backend if dependency is available" ON)
 
 # ============================================================
 #  Fetch Dependencies
@@ -108,6 +109,33 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Eigen3::Eigen
     comdlg32
 )
+
+if(TOPFRAME_ENABLE_AMGX)
+    set(AMGX_ROOT "$ENV{AMGX_ROOT}" CACHE PATH "Path to AmgX installation root")
+    if(AMGX_ROOT AND EXISTS "${AMGX_ROOT}/include")
+        target_include_directories(${PROJECT_NAME} PRIVATE "${AMGX_ROOT}/include")
+
+        if(EXISTS "${AMGX_ROOT}/lib")
+            target_link_directories(${PROJECT_NAME} PRIVATE "${AMGX_ROOT}/lib")
+        endif()
+
+        find_library(AMGX_LIBRARY
+            NAMES amgxsh amgx
+            PATHS "${AMGX_ROOT}/lib" "${AMGX_ROOT}/lib/x64"
+            NO_DEFAULT_PATH
+        )
+
+        if(AMGX_LIBRARY)
+            target_link_libraries(${PROJECT_NAME} PRIVATE ${AMGX_LIBRARY})
+            target_compile_definitions(${PROJECT_NAME} PRIVATE TOPFRAME_ENABLE_AMGX=1)
+            message(STATUS "AmgX enabled: ${AMGX_LIBRARY}")
+        else()
+            message(WARNING "TOPFRAME_ENABLE_AMGX=ON but no AmgX library was found under AMGX_ROOT")
+        endif()
+    else()
+        message(STATUS "AmgX disabled: set AMGX_ROOT to an installation with include/ and lib/")
+    endif()
+endif()
 
 # Copy resources if any
 # add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
