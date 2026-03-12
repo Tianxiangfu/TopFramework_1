@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cmake:*)",
+      "Bash(ls:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd.exe:*)",
+      "Bash(//c/Windows/System32/taskkill.exe:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(unzip:*)",
+      "Bash(rm:*)",
+      "Bash(python3:*)",
+      "Bash(python:*)",
+      "Bash(cp:*)",
+      "Bash(git clone:*)",
+      "Bash(curl:*)",
+      "Bash(git config:*)",
+      "Bash(xargs grep:*)",
+      "Bash(wc:*)",
+      "Bash(tree -L 3 /e/Code/TopOptFrame/src -I \"*.o\" 2>/dev/null || find /e/Code/TopOptFrame/src -type d | head -20)"
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "CMake Configure",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["-S", ".", "-B", "build", "-G", "Visual Studio 16 2019", "-A", "x64"],
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "CMake Build (Debug)",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["--build", "build", "--config", "Debug", "-j"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$msCompile"],
+      "dependsOn": "CMake Configure"
+    },
+    {
+      "label": "CMake Build (Release)",
+      "type": "shell",
+      "command": "cmake",
+      "args": ["--build", "build", "--config", "Release", "-j"],
+      "group": "build",
+      "problemMatcher": ["$msCompile"],
+      "dependsOn": "CMake Configure"
+    }
+  ]
+}
