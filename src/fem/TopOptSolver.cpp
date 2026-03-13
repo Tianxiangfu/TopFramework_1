@@ -185,6 +185,14 @@ bool TopOptSolver::runSIMP() {
         for (auto& lc : loadCases_) {
             solver.setLoadCase(lc);
             if (!solver.solve()) {
+                feResult_ = solver.result();
+                densityResult_.densities = x;
+                densityResult_.iteration = (int)densityResult_.history.size();
+                double partialVol = 0.0;
+                for (double xi : x) partialVol += xi;
+                densityResult_.volFrac = nElem > 0 ? partialVol / nElem : 0.0;
+                densityResult_.objective =
+                    densityResult_.history.empty() ? 0.0 : densityResult_.history.back();
                 return false;
             }
 
@@ -253,7 +261,10 @@ bool TopOptSolver::runSIMP() {
     // Final FEA solve for result output
     solver.setDensities(x, penalty, 1e-9 * mat_.E);
     solver.setLoadCase(loadCases_[0]);
-    solver.solve();
+    if (!solver.solve()) {
+        feResult_ = solver.result();
+        return false;
+    }
     feResult_ = solver.result();
 
     return true;
