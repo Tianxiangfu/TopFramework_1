@@ -1,0 +1,173 @@
+{
+  "version": "1.0",
+  "nodes": [
+    {
+      "id": 1,
+      "typeName": "domain-box",
+      "label": "Box Domain",
+      "posX": 40.0,
+      "posY": 80.0,
+      "params": [
+        { "name": "LengthX", "type": "Float", "value": 120.0, "min": 0.1, "max": 1000000.0, "step": 1.0 },
+        { "name": "LengthY", "type": "Float", "value": 40.0, "min": 0.1, "max": 1000000.0, "step": 1.0 },
+        { "name": "LengthZ", "type": "Float", "value": 8.0, "min": 0.1, "max": 1000000.0, "step": 1.0 },
+        { "name": "ElemsX", "type": "Int", "value": 24, "min": 1.0, "max": 500.0, "step": 1.0 },
+        { "name": "ElemsY", "type": "Int", "value": 8, "min": 1.0, "max": 500.0, "step": 1.0 },
+        { "name": "ElemsZ", "type": "Int", "value": 3, "min": 1.0, "max": 500.0, "step": 1.0 }
+      ]
+    },
+    {
+      "id": 2,
+      "typeName": "fea-material",
+      "label": "Isotropic Material",
+      "posX": 40.0,
+      "posY": 300.0,
+      "params": [
+        { "name": "E", "type": "Float", "value": 210000.0, "min": 1.0, "max": 1000000000.0, "step": 1000.0 },
+        { "name": "nu", "type": "Float", "value": 0.3, "min": 0.0, "max": 0.49, "step": 0.01 },
+        { "name": "Density", "type": "Float", "value": 7850.0, "min": 0.0, "max": 1000000.0, "step": 100.0 },
+        { "name": "Name", "type": "String", "value": "Steel" }
+      ]
+    },
+    {
+      "id": 3,
+      "typeName": "fea-fixed-support",
+      "label": "Fixed Support",
+      "posX": 320.0,
+      "posY": 40.0,
+      "params": [
+        { "name": "SelectionMode", "type": "Enum", "index": 0, "options": ["Face", "CoordRange"] },
+        { "name": "Face", "type": "Enum", "index": 0, "options": ["X-", "X+", "Y-", "Y+", "Z-", "Z+"] },
+        { "name": "FixX", "type": "Bool", "value": true },
+        { "name": "FixY", "type": "Bool", "value": true },
+        { "name": "FixZ", "type": "Bool", "value": true },
+        { "name": "CoordAxis", "type": "Enum", "index": 0, "options": ["X", "Y", "Z"] },
+        { "name": "CoordMin", "type": "Float", "value": 0.0, "min": -1000000.0, "max": 1000000.0, "step": 0.1 },
+        { "name": "CoordMax", "type": "Float", "value": 0.0, "min": -1000000.0, "max": 1000000.0, "step": 0.1 },
+        { "name": "Tolerance", "type": "Float", "value": 0.000001, "min": 0.0, "max": 1.0, "step": 0.000001 }
+      ]
+    },
+    {
+      "id": 4,
+      "typeName": "fea-point-force",
+      "label": "Point Force",
+      "posX": 320.0,
+      "posY": 250.0,
+      "params": [
+        { "name": "SelectionMode", "type": "Enum", "index": 0, "options": ["Face", "CoordRange"] },
+        { "name": "Face", "type": "Enum", "index": 1, "options": ["X-", "X+", "Y-", "Y+", "Z-", "Z+"] },
+        { "name": "ForceX", "type": "Float", "value": 0.0, "min": -1000000000.0, "max": 1000000000.0, "step": 10.0 },
+        { "name": "ForceY", "type": "Float", "value": -10000.0, "min": -1000000000.0, "max": 1000000000.0, "step": 10.0 },
+        { "name": "ForceZ", "type": "Float", "value": 0.0, "min": -1000000000.0, "max": 1000000000.0, "step": 10.0 },
+        { "name": "Distribution", "type": "Enum", "index": 0, "options": ["Total", "PerNode"] },
+        { "name": "CoordAxis", "type": "Enum", "index": 0, "options": ["X", "Y", "Z"] },
+        { "name": "CoordMin", "type": "Float", "value": 0.0, "min": -1000000.0, "max": 1000000.0, "step": 0.1 },
+        { "name": "CoordMax", "type": "Float", "value": 0.0, "min": -1000000.0, "max": 1000000.0, "step": 0.1 },
+        { "name": "Tolerance", "type": "Float", "value": 0.000001, "min": 0.0, "max": 1.0, "step": 0.000001 }
+      ]
+    },
+    {
+      "id": 5,
+      "typeName": "fea-load-case",
+      "label": "Load Case",
+      "posX": 600.0,
+      "posY": 150.0,
+      "params": [
+        { "name": "Name", "type": "String", "value": "GPUQuickCheck" },
+        { "name": "Weight", "type": "Float", "value": 1.0, "min": 0.0, "max": 100.0, "step": 0.1 }
+      ]
+    },
+    {
+      "id": 6,
+      "typeName": "topo-simp",
+      "label": "SIMP GPU AmgX",
+      "posX": 890.0,
+      "posY": 120.0,
+      "params": [
+        { "name": "Backend", "type": "Enum", "index": 2, "options": ["Auto", "CPU Direct", "GPU AmgX"] },
+        { "name": "EnableGPU", "type": "Bool", "value": true },
+        { "name": "FallbackToCPU", "type": "Bool", "value": false },
+        { "name": "VolFrac", "type": "Float", "value": 0.4, "min": 0.01, "max": 0.99, "step": 0.01 },
+        { "name": "Penalty", "type": "Float", "value": 3.0, "min": 1.0, "max": 5.0, "step": 0.5 },
+        { "name": "FilterR", "type": "Float", "value": 2.0, "min": 0.1, "max": 50.0, "step": 0.1 },
+        { "name": "FilterType", "type": "Enum", "index": 0, "options": ["Density", "Sensitivity"] },
+        { "name": "MaxIter", "type": "Int", "value": 8, "min": 1.0, "max": 2000.0, "step": 1.0 },
+        { "name": "MinDensity", "type": "Float", "value": 0.001, "min": 0.000001, "max": 0.1, "step": 0.001 },
+        { "name": "SolverMaxIter", "type": "Int", "value": 1000, "min": 1.0, "max": 10000.0, "step": 10.0 },
+        { "name": "SolverTol", "type": "Float", "value": 0.000001, "min": 0.000000000001, "max": 1.0, "step": 0.000001 },
+        { "name": "Objective", "type": "Enum", "index": 0, "options": ["MinCompliance"] },
+        { "name": "AmgXPath", "type": "String", "value": "D:\\Desktop\\TopOptFrame\\build-gpu\\Debug\\configs\\amgx\\default.json" }
+      ]
+    },
+    {
+      "id": 7,
+      "typeName": "post-density-view",
+      "label": "Density View",
+      "posX": 1220.0,
+      "posY": 120.0,
+      "params": [
+        { "name": "Threshold", "type": "Float", "value": 0.3, "min": 0.01, "max": 1.0, "step": 0.01 },
+        { "name": "SmoothIter", "type": "Int", "value": 0, "min": 0.0, "max": 10.0, "step": 1.0 }
+      ]
+    },
+    {
+      "id": 8,
+      "typeName": "output-viewer",
+      "label": "3D Viewer",
+      "posX": 1510.0,
+      "posY": 120.0,
+      "params": [
+        { "name": "ShowEdges", "type": "Bool", "value": true },
+        { "name": "Color", "type": "Color3", "value": [0.3, 0.8, 0.75] }
+      ]
+    },
+    {
+      "id": 9,
+      "typeName": "output-display",
+      "label": "Display",
+      "posX": 1220.0,
+      "posY": 360.0,
+      "params": [
+        { "name": "Title", "type": "String", "value": "GPU Result" }
+      ]
+    },
+    {
+      "id": 10,
+      "typeName": "post-convergence",
+      "label": "Convergence Plot",
+      "posX": 1220.0,
+      "posY": 500.0,
+      "params": [
+        { "name": "ShowCompliance", "type": "Bool", "value": true },
+        { "name": "ShowVolume", "type": "Bool", "value": true }
+      ]
+    }
+  ],
+  "connections": [
+    { "id": 1, "startNodeId": 1, "startPortIdx": 0, "endNodeId": 3, "endPortIdx": 0 },
+    { "id": 2, "startNodeId": 1, "startPortIdx": 0, "endNodeId": 4, "endPortIdx": 0 },
+    { "id": 3, "startNodeId": 3, "startPortIdx": 0, "endNodeId": 5, "endPortIdx": 0 },
+    { "id": 4, "startNodeId": 4, "startPortIdx": 0, "endNodeId": 5, "endPortIdx": 1 },
+    { "id": 5, "startNodeId": 1, "startPortIdx": 0, "endNodeId": 6, "endPortIdx": 0 },
+    { "id": 6, "startNodeId": 2, "startPortIdx": 0, "endNodeId": 6, "endPortIdx": 1 },
+    { "id": 7, "startNodeId": 5, "startPortIdx": 0, "endNodeId": 6, "endPortIdx": 2 },
+    { "id": 8, "startNodeId": 6, "startPortIdx": 0, "endNodeId": 7, "endPortIdx": 0 },
+    { "id": 9, "startNodeId": 1, "startPortIdx": 0, "endNodeId": 7, "endPortIdx": 1 },
+    { "id": 10, "startNodeId": 7, "startPortIdx": 0, "endNodeId": 8, "endPortIdx": 0 },
+    { "id": 11, "startNodeId": 6, "startPortIdx": 1, "endNodeId": 9, "endPortIdx": 0 },
+    { "id": 12, "startNodeId": 6, "startPortIdx": 0, "endNodeId": 10, "endPortIdx": 0 }
+  ],
+  "nextNodeId": 11,
+  "nextConnId": 13,
+  "imnodesState": "",
+  "viewState": {
+    "horizontalSplitRatio": 0.4,
+    "leftVertSplitRatio": 0.65,
+    "centerVertSplitRatio": 0.65,
+    "rightPanelRatio": 0.15,
+    "camDistance": 180.0,
+    "camYaw": 45.0,
+    "camPitch": 25.0,
+    "camCenter": [60.0, 20.0, 4.0]
+  }
+}
