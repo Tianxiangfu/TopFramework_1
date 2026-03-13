@@ -114,6 +114,26 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     TOPFRAME_DEFAULT_AMGX_CONFIG_REL="configs/amgx/default.json"
 )
 
+set(TOPFRAME_AMGX_DLL "")
+
+function(topframe_copy_runtime_assets target_name)
+    if(EXISTS "${CMAKE_SOURCE_DIR}/configs")
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${CMAKE_SOURCE_DIR}/configs"
+            "$<TARGET_FILE_DIR:${target_name}>/configs"
+        )
+    endif()
+
+    if(TOPFRAME_AMGX_DLL)
+        add_custom_command(TARGET ${target_name} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${TOPFRAME_AMGX_DLL}"
+            "$<TARGET_FILE_DIR:${target_name}>"
+        )
+    endif()
+endfunction()
+
 if(TOPFRAME_ENABLE_AMGX)
     set(AMGX_ROOT "$ENV{AMGX_ROOT}" CACHE PATH "Path to AmgX installation root")
     if(AMGX_ROOT AND EXISTS "${AMGX_ROOT}/include")
@@ -136,6 +156,7 @@ if(TOPFRAME_ENABLE_AMGX)
                 PATHS "${AMGX_ROOT}/bin" "${AMGX_ROOT}/lib" "${AMGX_ROOT}/lib/x64"
                 NO_DEFAULT_PATH
             )
+            set(TOPFRAME_AMGX_DLL "${AMGX_DLL}")
 
             target_link_libraries(${PROJECT_NAME} PRIVATE
                 ${AMGX_LIBRARY}
@@ -151,21 +172,36 @@ if(TOPFRAME_ENABLE_AMGX)
     endif()
 endif()
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/configs")
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-        "${CMAKE_SOURCE_DIR}/configs"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>/configs"
+topframe_copy_runtime_assets(${PROJECT_NAME})
+
+add_executable(topframe_gpu_amgx_smoke
+    tests/gpu_amgx_smoke.cpp
+    src/fem/FEMSolver.cpp
+    src/fem/GpuAmgXSolverBackend.cpp
+)
+
+target_include_directories(topframe_gpu_amgx_smoke PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+)
+
+target_link_libraries(topframe_gpu_amgx_smoke PRIVATE
+    Eigen3::Eigen
+)
+
+target_compile_definitions(topframe_gpu_amgx_smoke PRIVATE
+    TOPFRAME_DEFAULT_AMGX_CONFIG_REL="configs/amgx/default.json"
+)
+
+if(AMGX_LIBRARY)
+    target_include_directories(topframe_gpu_amgx_smoke PRIVATE "${AMGX_ROOT}/include")
+    target_link_libraries(topframe_gpu_amgx_smoke PRIVATE
+        ${AMGX_LIBRARY}
+        CUDA::cudart
     )
+    target_compile_definitions(topframe_gpu_amgx_smoke PRIVATE TOPFRAME_ENABLE_AMGX=1)
 endif()
 
-if(AMGX_DLL)
-    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${AMGX_DLL}"
-        "$<TARGET_FILE_DIR:${PROJECT_NAME}>"
-    )
-endif()
+topframe_copy_runtime_assets(topframe_gpu_amgx_smoke)
 
 message(STATUS "=== TopOptFrameC configured ===")
 message(STATUS "  Build type : ${CMAKE_BUILD_TYPE}")
