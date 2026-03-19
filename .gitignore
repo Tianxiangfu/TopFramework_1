@@ -1,2 +1,10 @@
 build/
 build-gpu/
+build-root-debug/
+build-root-release/
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+*.ilk
