@@ -5,6 +5,27 @@
 
 namespace TopOpt {
 
+namespace {
+
+void storeDensitySnapshot(
+    DensityFieldData& densityResult,
+    const std::vector<double>& densities)
+{
+    densityResult.densities = densities;
+    densityResult.iteration = static_cast<int>(densityResult.history.size());
+
+    double totalDensity = 0.0;
+    for (double x : densities) {
+        totalDensity += x;
+    }
+
+    densityResult.volFrac = densities.empty() ? 0.0 : totalDensity / densities.size();
+    densityResult.objective =
+        densityResult.history.empty() ? 0.0 : densityResult.history.back();
+}
+
+} // namespace
+
 void TopOptSolver::setMesh(const FEMeshData& mesh) { mesh_ = mesh; }
 void TopOptSolver::setMaterial(const MaterialData& mat) { mat_ = mat; }
 void TopOptSolver::setLoadCases(const std::vector<LoadCaseData>& lcs) { loadCases_ = lcs; }
@@ -186,13 +207,7 @@ bool TopOptSolver::runSIMP() {
             solver.setLoadCase(lc);
             if (!solver.solve()) {
                 feResult_ = solver.result();
-                densityResult_.densities = x;
-                densityResult_.iteration = (int)densityResult_.history.size();
-                double partialVol = 0.0;
-                for (double xi : x) partialVol += xi;
-                densityResult_.volFrac = nElem > 0 ? partialVol / nElem : 0.0;
-                densityResult_.objective =
-                    densityResult_.history.empty() ? 0.0 : densityResult_.history.back();
+                storeDensitySnapshot(densityResult_, x);
                 return false;
             }
 
@@ -251,18 +266,14 @@ bool TopOptSolver::runSIMP() {
     }
 
     // Store final results
-    densityResult_.densities = x;
-    densityResult_.iteration = (int)densityResult_.history.size();
-    double finalVol = 0;
-    for (double xi : x) finalVol += xi;
-    densityResult_.volFrac = finalVol / nElem;
-    densityResult_.objective = densityResult_.history.empty() ? 0 : densityResult_.history.back();
+    storeDensitySnapshot(densityResult_, x);
 
     // Final FEA solve for result output
     solver.setDensities(x, penalty, 1e-9 * mat_.E);
     solver.setLoadCase(loadCases_[0]);
     if (!solver.solve()) {
         feResult_ = solver.result();
+        storeDensitySnapshot(densityResult_, x);
         return false;
     }
     feResult_ = solver.result();

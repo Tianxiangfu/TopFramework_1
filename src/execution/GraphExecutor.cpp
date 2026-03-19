@@ -27,6 +27,18 @@ SolverBackend solverBackendFromParam(const ParamDef* param) {
     return SolverBackend::Auto;
 }
 
+const char* solverBackendName(SolverBackend backend) {
+    switch (backend) {
+    case SolverBackend::CPU:
+        return "cpu-direct";
+    case SolverBackend::GPU_AmgX:
+        return "gpu-amgx";
+    case SolverBackend::Auto:
+    default:
+        return "auto";
+    }
+}
+
 FESolverConfig readSolverConfig(GraphExecutor* exec, int nodeId) {
     FESolverConfig cfg;
     cfg.backend = solverBackendFromParam(exec->findParam(nodeId, "Backend"));
@@ -59,6 +71,23 @@ std::string solverSummary(const FEResultData& result) {
         os << ", msg=" << result.solverMessage;
     }
     return os.str();
+}
+
+std::string solverFailureKind(const FEResultData& result) {
+    const std::string& msg = result.solverMessage;
+    if (msg.find("unavailable") != std::string::npos) {
+        return "amgx-unavailable";
+    }
+    if (msg.find("config not found") != std::string::npos) {
+        return "amgx-config-missing";
+    }
+    if (msg.find("did not converge") != std::string::npos) {
+        return "amgx-not-converged";
+    }
+    if (msg.find("failed") != std::string::npos) {
+        return "solver-failed";
+    }
+    return "unknown";
 }
 
 } // namespace
@@ -954,6 +983,7 @@ void GraphExecutor::evalTopoSIMP(int nodeId) {
     auto* pMD  = findParam(nodeId, "MinDensity");
 
     TopOptSolver opt;
+    const FESolverConfig solverCfg = readSolverConfig(this, nodeId);
     opt.volFrac      = pVF ? (double)pVF->floatVal : 0.5;
     opt.penalty      = pP  ? (double)pP->floatVal  : 3.0;
     opt.filterRadius = pFR ? (double)pFR->floatVal : 1.5;
@@ -964,12 +994,14 @@ void GraphExecutor::evalTopoSIMP(int nodeId) {
     opt.setMesh(inMesh.asFEMesh());
     opt.setMaterial(inMat.asMaterial());
     opt.setLoadCases(loadCases);
-    opt.setSolverConfig(readSolverConfig(this, nodeId));
+    opt.setSolverConfig(solverCfg);
 
     Logger::instance().info("[Exec] SIMP: starting optimization (volFrac=" +
                             std::to_string(opt.volFrac) + ", penalty=" +
                             std::to_string(opt.penalty) + ", maxIter=" +
-                            std::to_string(opt.maxIter) + ")...");
+                            std::to_string(opt.maxIter) + ", requestedBackend=" +
+                            solverBackendName(solverCfg.backend) +
+                            ")...");
 
     bool ok = opt.runSIMP();
 
@@ -980,6 +1012,11 @@ void GraphExecutor::evalTopoSIMP(int nodeId) {
                                 ", objective=" + std::to_string(dr.objective) +
                                 ", " + solverSummary(opt.feResult()));
     } else {
+        Logger::instance().error("[Exec] SIMP: failure-kind=" + solverFailureKind(opt.feResult()));
+        Logger::instance().error("[Exec] SIMP debug: solverMessage='" +
+                                 opt.feResult().solverMessage +
+                                 "', converged=" + (opt.feResult().converged ? "true" : "false") +
+                                 ", backend=" + opt.feResult().backendUsed);
         Logger::instance().error("[Exec] SIMP: optimization failed, " + solverSummary(opt.feResult()));
     }
 

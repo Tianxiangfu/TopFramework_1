@@ -1,14 +1,52 @@
 #include "ProjectSerializer.h"
 #include "../node_editor/NodeEditor.h"
 #include "../node_editor/Node.h"
+#include "../node_editor/NodeRegistry.h"
 #include "../utils/Logger.h"
 
 #include <nlohmann/json.hpp>
+#include <algorithm>
 #include <fstream>
 
 using json = nlohmann::json;
 
 namespace TopOpt {
+
+namespace {
+
+void mergeMissingParamsFromRegistry(NodeInstance& node) {
+    const NodeTypeDef* def = NodeRegistry::instance().findType(node.typeName);
+    if (!def) {
+        return;
+    }
+
+    for (const ParamDef& defaultParam : def->defaultParams) {
+        auto it = std::find_if(
+            node.params.begin(),
+            node.params.end(),
+            [&](const ParamDef& existing) { return existing.name == defaultParam.name; }
+        );
+        if (it == node.params.end()) {
+            node.params.push_back(defaultParam);
+            continue;
+        }
+
+        if (it->type == ParamType::Enum) {
+            it->enumOptions = defaultParam.enumOptions;
+            if (!it->enumOptions.empty()) {
+                it->enumIndex = std::clamp(
+                    it->enumIndex,
+                    0,
+                    static_cast<int>(it->enumOptions.size()) - 1
+                );
+            } else {
+                it->enumIndex = 0;
+            }
+        }
+    }
+}
+
+} // namespace
 
 // ================================================================
 //  ParamDef JSON
@@ -139,6 +177,7 @@ static NodeInstance nodeFromJson(const json& j) {
             n.params.push_back(paramFromJson(pj));
         }
     }
+    mergeMissingParamsFromRegistry(n);
     return n;
 }
 

@@ -12,6 +12,19 @@
       }
     },
     {
+      "name": "debug-gpu",
+      "displayName": "Debug GPU AmgX",
+      "generator": "Visual Studio 16 2019",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-gpu",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "environment": {
+        "AMGX_ROOT": "D:/AmgX"
+      }
+    },
+    {
       "name": "release",
       "displayName": "Release",
       "generator": "Visual Studio 16 2019",
@@ -19,6 +32,19 @@
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "release-gpu",
+      "displayName": "Release GPU AmgX",
+      "generator": "Visual Studio 16 2019",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build-gpu",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      },
+      "environment": {
+        "AMGX_ROOT": "D:/AmgX"
       }
     }
   ],
@@ -29,8 +55,18 @@
       "configuration": "Debug"
     },
     {
+      "name": "debug-gpu",
+      "configurePreset": "debug-gpu",
+      "configuration": "Debug"
+    },
+    {
       "name": "release",
       "configurePreset": "release",
+      "configuration": "Release"
+    },
+    {
+      "name": "release-gpu",
+      "configurePreset": "release-gpu",
       "configuration": "Release"
     }
   ]
