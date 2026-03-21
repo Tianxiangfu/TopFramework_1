@@ -36,6 +36,8 @@ public:
 
     // Live preview: evaluate a node and its upstream deps, push result to View3D
     void previewNode(int nodeId);
+    bool previewDensityViewFromCache(int nodeId);
+    int cachedDensityFrameCountForNode(int nodeId) const;
 
     // Helper: find param by name on a node
     const ParamDef* findParam(int nodeId, const std::string& name);
@@ -104,6 +106,9 @@ private:
 
     // Evaluate a node and all its upstream dependencies (for preview)
     void evaluateUpstream(int targetNodeId);
+    const NodeData* findCachedOutput(int nodeId, int portIdx) const;
+    const DensityFieldData* findCachedDensityInput(int nodeId) const;
+    const FEMeshData* findCachedFEMeshInput(int nodeId) const;
 
     // Mesh generation helpers (for data-mesh-gen)
     std::vector<Triangle3D> generateBox(int resolution);
@@ -116,6 +121,7 @@ private:
 
     // Computed output data, keyed by {nodeId, portIndex}
     std::map<OutputKey, NodeData> outputData_;
+    std::map<OutputKey, NodeData> runOutputData_;
 
     // Step execution state
     std::vector<int> executionOrder_;

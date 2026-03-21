@@ -90,6 +90,7 @@ struct DensityFieldData {
     double objective = 0;
     int iteration = 0;
     std::vector<double> history; // objective history
+    std::vector<std::vector<double>> densityFrames; // per-iteration density snapshots
 };
 
 // ============================================================

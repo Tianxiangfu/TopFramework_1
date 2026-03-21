@@ -390,6 +390,8 @@ void Application::run() {
                     ImGui::Separator();
                     ImGui::BeginChild("PropertyContent", ImVec2(0, 0), ImGuiChildFlags_None);
                     propPanel_->draw(*nodeEditor_);
+                    drawDensityPlaybackControls();
+                    updateDensityPlayback();
                     ImGui::EndChild();
                 }
                 ImGui::EndChild();
@@ -758,6 +760,9 @@ void Application::drawToolbar() {
             isExecuting_ = true;
             if (executor_) executor_->runAll();
             isExecuting_ = false;
+            prevSelectedNodeId_ = -1;
+            prevParamHash_ = 0;
+            densityPlayback_ = {};
         }
         ImGui::PopStyleColor();
     }
@@ -765,6 +770,9 @@ void Application::drawToolbar() {
     ImGui::SameLine();
     if (ImGui::Button("Step")) {
         if (executor_) executor_->stepOne();
+        prevSelectedNodeId_ = -1;
+        prevParamHash_ = 0;
+        densityPlayback_ = {};
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Execute One Step");
     ImGui::SameLine();
@@ -772,6 +780,9 @@ void Application::drawToolbar() {
         isExecuting_ = false;
         if (executor_) executor_->reset();
         if (view3D_) view3D_->clearModel();
+        prevSelectedNodeId_ = -1;
+        prevParamHash_ = 0;
+        densityPlayback_ = {};
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reset Execution State");
 
@@ -918,10 +929,155 @@ int Application::computeParamHash(int nodeId) const {
     return hash;
 }
 
+ParamDef* Application::findNodeParam(NodeInstance& node, const std::string& name) const {
+    for (auto& param : node.params) {
+        if (param.name == name) {
+            return &param;
+        }
+    }
+    return nullptr;
+}
+
+const ParamDef* Application::findNodeParam(const NodeInstance& node, const std::string& name) const {
+    for (const auto& param : node.params) {
+        if (param.name == name) {
+            return &param;
+        }
+    }
+    return nullptr;
+}
+
+void Application::drawDensityPlaybackControls() {
+    NodeInstance* selected = nodeEditor_ ? nodeEditor_->selectedNode() : nullptr;
+    if (!selected || selected->typeName != "post-density-view") {
+        return;
+    }
+
+    ParamDef* pAnimate = findNodeParam(*selected, "Animate");
+    ParamDef* pLoop = findNodeParam(*selected, "Loop");
+    ParamDef* pFrame = findNodeParam(*selected, "Frame");
+    if (!pFrame) {
+        return;
+    }
+
+    const int frameCount = executor_ ? executor_->cachedDensityFrameCountForNode(selected->id) : 0;
+    const int maxFrame = std::max(0, frameCount - 1);
+    pFrame->intVal = std::clamp(pFrame->intVal, 0, maxFrame);
+
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Playback");
+
+    if (frameCount <= 0) {
+        densityPlayback_.playing = false;
+        ImGui::TextDisabled("Run the graph to generate density animation frames.");
+        return;
+    }
+
+    ImGui::TextDisabled("Frame %d / %d", pFrame->intVal + 1, frameCount);
+
+    const bool animateEnabled = pAnimate && pAnimate->boolVal;
+    if (!animateEnabled) {
+        ImGui::TextDisabled("Enable 'Animate' above to use the playback controls.");
+    }
+
+    if (!animateEnabled) ImGui::BeginDisabled();
+    const char* playLabel = densityPlayback_.playing ? "Pause" : "Play";
+    if (ImGui::Button(playLabel)) {
+        if (!densityPlayback_.playing && pFrame->intVal >= maxFrame && !(pLoop && pLoop->boolVal)) {
+            pFrame->intVal = 0;
+        }
+        densityPlayback_.nodeId = selected->id;
+        densityPlayback_.playing = !densityPlayback_.playing;
+        densityPlayback_.accumulator = 0.0f;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Stop")) {
+        densityPlayback_.nodeId = selected->id;
+        densityPlayback_.playing = false;
+        densityPlayback_.accumulator = 0.0f;
+        pFrame->intVal = 0;
+    }
+    int frameValue = pFrame->intVal;
+    if (ImGui::SliderInt("Playback Frame", &frameValue, 0, maxFrame)) {
+        pFrame->intVal = frameValue;
+        densityPlayback_.nodeId = selected->id;
+        densityPlayback_.accumulator = 0.0f;
+    }
+    if (!animateEnabled) ImGui::EndDisabled();
+}
+
+void Application::updateDensityPlayback() {
+    NodeInstance* selected = nodeEditor_ ? nodeEditor_->selectedNode() : nullptr;
+    if (!selected || selected->typeName != "post-density-view") {
+        densityPlayback_ = {};
+        return;
+    }
+
+    ParamDef* pAnimate = findNodeParam(*selected, "Animate");
+    ParamDef* pAutoPlay = findNodeParam(*selected, "AutoPlay");
+    ParamDef* pLoop = findNodeParam(*selected, "Loop");
+    ParamDef* pFps = findNodeParam(*selected, "FPS");
+    ParamDef* pFrame = findNodeParam(*selected, "Frame");
+    if (!pFrame) {
+        densityPlayback_ = {};
+        return;
+    }
+
+    const int frameCount = executor_ ? executor_->cachedDensityFrameCountForNode(selected->id) : 0;
+    const int maxFrame = std::max(0, frameCount - 1);
+    pFrame->intVal = std::clamp(pFrame->intVal, 0, maxFrame);
+
+    if (densityPlayback_.nodeId != selected->id) {
+        densityPlayback_.nodeId = selected->id;
+        densityPlayback_.accumulator = 0.0f;
+        densityPlayback_.playing =
+            frameCount > 1 &&
+            pAnimate && pAnimate->boolVal &&
+            pAutoPlay && pAutoPlay->boolVal;
+    }
+
+    if (frameCount <= 1 || !(pAnimate && pAnimate->boolVal)) {
+        densityPlayback_.playing = false;
+        densityPlayback_.accumulator = 0.0f;
+        return;
+    }
+
+    if (!densityPlayback_.playing) {
+        return;
+    }
+
+    const float fps = pFps ? std::max(pFps->floatVal, 1.0f) : 6.0f;
+    const float frameDuration = 1.0f / fps;
+    densityPlayback_.accumulator += ImGui::GetIO().DeltaTime;
+
+    while (densityPlayback_.accumulator >= frameDuration) {
+        densityPlayback_.accumulator -= frameDuration;
+
+        int nextFrame = pFrame->intVal + 1;
+        if (nextFrame > maxFrame) {
+            if (pLoop && pLoop->boolVal) {
+                nextFrame = 0;
+            } else {
+                nextFrame = maxFrame;
+                densityPlayback_.playing = false;
+                densityPlayback_.accumulator = 0.0f;
+            }
+        }
+
+        if (nextFrame == pFrame->intVal) {
+            break;
+        }
+
+        pFrame->intVal = nextFrame;
+    }
+}
+
 void Application::updateLivePreview() {
     int selId = nodeEditor_->selectedNodeId();
     if (selId < 0) {
         prevSelectedNodeId_ = -1;
+        densityPlayback_ = {};
         return;
     }
 
@@ -936,6 +1092,10 @@ void Application::updateLivePreview() {
         auto* node = nodeEditor_->findNode(selId);
         if (node) {
             const std::string& t = node->typeName;
+            if (t == "post-density-view") {
+                executor_->previewDensityViewFromCache(selId);
+                return;
+            }
             if (t == "topo-simp" || t == "topo-beso" || t == "fea-solver") {
                 return; // Skip expensive computations
             }

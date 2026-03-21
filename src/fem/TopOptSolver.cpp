@@ -24,6 +24,13 @@ void storeDensitySnapshot(
         densityResult.history.empty() ? 0.0 : densityResult.history.back();
 }
 
+void appendDensityFrame(
+    DensityFieldData& densityResult,
+    const std::vector<double>& densities)
+{
+    densityResult.densityFrames.push_back(densities);
+}
+
 } // namespace
 
 void TopOptSolver::setMesh(const FEMeshData& mesh) { mesh_ = mesh; }
@@ -190,6 +197,7 @@ bool TopOptSolver::runSIMP() {
     }
 
     densityResult_.history.clear();
+    densityResult_.densityFrames.clear();
 
     FEMSolver solver;
     solver.setMesh(mesh_);
@@ -207,6 +215,7 @@ bool TopOptSolver::runSIMP() {
             solver.setLoadCase(lc);
             if (!solver.solve()) {
                 feResult_ = solver.result();
+                appendDensityFrame(densityResult_, x);
                 storeDensitySnapshot(densityResult_, x);
                 return false;
             }
@@ -253,6 +262,7 @@ bool TopOptSolver::runSIMP() {
         currentVol /= nElem;
 
         densityResult_.history.push_back(totalCompliance);
+        appendDensityFrame(densityResult_, x);
 
         // Convergence check
         double change = 0;

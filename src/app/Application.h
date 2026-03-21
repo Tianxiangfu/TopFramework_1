@@ -13,6 +13,8 @@ class ModulePanel;
 class View3DPanel;
 class CommandHistory;
 class GraphExecutor;
+struct NodeInstance;
+struct ParamDef;
 
 // Active tool for left toolbar
 enum class Tool { Select, Zoom, Rotate, Camera };
@@ -35,6 +37,10 @@ private:
     void drawStatusBar();
     void drawLeftToolbar();
     void handleKeyboardShortcuts();
+    void drawDensityPlaybackControls();
+    void updateDensityPlayback();
+    ParamDef* findNodeParam(NodeInstance& node, const std::string& name) const;
+    const ParamDef* findNodeParam(const NodeInstance& node, const std::string& name) const;
 
     // File operations
     void newProject();
@@ -76,6 +82,14 @@ private:
     int prevParamHash_ = 0;
     int computeParamHash(int nodeId) const;
     void updateLivePreview();
+
+    struct DensityPlaybackState {
+        int nodeId = -1;
+        bool playing = false;
+        float accumulator = 0.0f;
+    };
+
+    DensityPlaybackState densityPlayback_;
 };
 
 } // namespace TopOpt

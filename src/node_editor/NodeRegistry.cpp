@@ -426,7 +426,12 @@ void NodeRegistry::registerBuiltinTypes() {
         {{ "mesh", "Mesh", PortDataType::Mesh }},
         {
             { "Threshold",  ParamType::Float, 0.5f, 0, false, "", 0, {}, {}, 0.01f, 1.f, 0.01f },
-            { "SmoothIter", ParamType::Int,   0.f, 0, false, "", 0, {}, {}, 0.f, 10.f, 1.f }
+            { "SmoothIter", ParamType::Int,   0.f, 0, false, "", 0, {}, {}, 0.f, 10.f, 1.f },
+            { "Animate",    ParamType::Bool,  0.f, 0, false },
+            { "AutoPlay",   ParamType::Bool,  0.f, 0, true },
+            { "Loop",       ParamType::Bool,  0.f, 0, true },
+            { "FPS",        ParamType::Float, 6.0f, 0, false, "", 0, {}, {}, 1.f, 60.f, 1.f },
+            { "Frame",      ParamType::Int,   0.f, 0, false, "", 0, {}, {}, 0.f, 10000.f, 1.f }
         }
     });
 

@@ -90,6 +90,16 @@ std::string solverFailureKind(const FEResultData& result) {
     return "unknown";
 }
 
+const std::vector<double>* selectDensityFrame(const DensityFieldData& density, int frameIndex) {
+    if (density.densityFrames.empty()) {
+        return density.densities.empty() ? nullptr : &density.densities;
+    }
+
+    const int lastFrame = static_cast<int>(density.densityFrames.size()) - 1;
+    frameIndex = std::clamp(frameIndex, 0, lastFrame);
+    return &density.densityFrames[frameIndex];
+}
+
 } // namespace
 
 GraphExecutor::GraphExecutor() {}
@@ -157,6 +167,54 @@ NodeData GraphExecutor::getInputData(int nodeId, int portIdx) {
         }
     }
     return NodeData();
+}
+
+const NodeData* GraphExecutor::findCachedOutput(int nodeId, int portIdx) const {
+    OutputKey key{nodeId, portIdx};
+
+    auto itRun = runOutputData_.find(key);
+    if (itRun != runOutputData_.end()) {
+        return &itRun->second;
+    }
+
+    auto itPreview = outputData_.find(key);
+    if (itPreview != outputData_.end()) {
+        return &itPreview->second;
+    }
+
+    return nullptr;
+}
+
+const DensityFieldData* GraphExecutor::findCachedDensityInput(int nodeId) const {
+    if (!editor_) return nullptr;
+
+    for (const auto& c : editor_->connections()) {
+        if (c.endNodeId == nodeId && c.endPortIdx == 0) {
+            const NodeData* data = findCachedOutput(c.startNodeId, c.startPortIdx);
+            if (data && data->isDensityField()) {
+                return &data->asDensityField();
+            }
+            break;
+        }
+    }
+
+    return nullptr;
+}
+
+const FEMeshData* GraphExecutor::findCachedFEMeshInput(int nodeId) const {
+    if (!editor_) return nullptr;
+
+    for (const auto& c : editor_->connections()) {
+        if (c.endNodeId == nodeId && c.endPortIdx == 1) {
+            const NodeData* data = findCachedOutput(c.startNodeId, c.startPortIdx);
+            if (data && data->isFEMesh()) {
+                return &data->asFEMesh();
+            }
+            break;
+        }
+    }
+
+    return nullptr;
 }
 
 // ================================================================
@@ -230,6 +288,7 @@ void GraphExecutor::runAll() {
     if (!editor_) return;
 
     outputData_.clear();
+    runOutputData_.clear();
     stepIndex_ = 0;
 
     std::vector<int> order;
@@ -247,6 +306,7 @@ void GraphExecutor::runAll() {
 
     executionOrder_ = order;
     stepIndex_ = (int)order.size();
+    runOutputData_ = outputData_;
     Logger::instance().info("[Exec] Execution complete.");
 }
 
@@ -255,6 +315,7 @@ void GraphExecutor::stepOne() {
 
     if (executionOrder_.empty() || stepIndex_ >= (int)executionOrder_.size()) {
         outputData_.clear();
+        runOutputData_.clear();
         stepIndex_ = 0;
         if (!buildExecutionOrder(executionOrder_)) return;
         Logger::instance().info("[Exec] Step mode: " + std::to_string(executionOrder_.size()) + " nodes queued.");
@@ -267,6 +328,7 @@ void GraphExecutor::stepOne() {
         Logger::instance().info("[Step " + std::to_string(stepIndex_ + 1) + "/" +
                                 std::to_string(executionOrder_.size()) + "] " + label);
         evaluateNode(id);
+        runOutputData_ = outputData_;
         stepIndex_++;
 
         if (stepIndex_ >= (int)executionOrder_.size()) {
@@ -277,6 +339,7 @@ void GraphExecutor::stepOne() {
 
 void GraphExecutor::reset() {
     outputData_.clear();
+    runOutputData_.clear();
     executionOrder_.clear();
     stepIndex_ = 0;
     Logger::instance().info("[Exec] Execution state reset.");
@@ -1205,13 +1268,26 @@ void GraphExecutor::evalPostDensityView(int nodeId) {
     auto& mesh    = inMesh.asFEMesh();
 
     auto* pThresh = findParam(nodeId, "Threshold");
+    auto* pAnimate = findParam(nodeId, "Animate");
+    auto* pFrame  = findParam(nodeId, "Frame");
     double threshold = pThresh ? (double)pThresh->floatVal : 0.5;
+    int frameIndex =
+        (pAnimate && pAnimate->boolVal && pFrame)
+            ? pFrame->intVal
+            : std::max(0, static_cast<int>(density.densityFrames.size()) - 1);
+
+    const std::vector<double>* frame = selectDensityFrame(density, frameIndex);
+    DensityFieldData viewDensity = density;
+    if (frame) {
+        viewDensity.densities = *frame;
+    }
 
     // Use boundary-aware rendering
-    auto tris = feMeshDensityToTriangles(mesh, density, threshold);
+    auto tris = feMeshDensityToTriangles(mesh, viewDensity, threshold);
 
     Logger::instance().info("[Exec] Density View: " + std::to_string(tris.size()) +
-                            " triangles (threshold=" + std::to_string(threshold) + ")");
+                            " triangles (threshold=" + std::to_string(threshold) +
+                            ", frame=" + std::to_string(frameIndex) + ")");
 
     outputData_[{nodeId, 0}] = NodeData::makeMesh(std::move(tris));
 }
@@ -1648,6 +1724,47 @@ void GraphExecutor::evaluateUpstream(int targetNodeId) {
             evaluateNode(id);
         }
     }
+}
+
+int GraphExecutor::cachedDensityFrameCountForNode(int nodeId) const {
+    const DensityFieldData* density = findCachedDensityInput(nodeId);
+    if (!density) {
+        return 0;
+    }
+    if (!density->densityFrames.empty()) {
+        return static_cast<int>(density->densityFrames.size());
+    }
+    return density->densities.empty() ? 0 : 1;
+}
+
+bool GraphExecutor::previewDensityViewFromCache(int nodeId) {
+    if (!editor_ || !view3D_) return false;
+
+    const DensityFieldData* density = findCachedDensityInput(nodeId);
+    const FEMeshData* mesh = findCachedFEMeshInput(nodeId);
+    if (!density || !mesh) {
+        return false;
+    }
+
+    const ParamDef* pThresh = findParam(nodeId, "Threshold");
+    const ParamDef* pAnimate = findParam(nodeId, "Animate");
+    const ParamDef* pFrame = findParam(nodeId, "Frame");
+    const double threshold = pThresh ? (double)pThresh->floatVal : 0.5;
+    const int frameIndex =
+        (pAnimate && pAnimate->boolVal && pFrame)
+            ? pFrame->intVal
+            : std::max(0, static_cast<int>(density->densityFrames.size()) - 1);
+
+    const std::vector<double>* frame = selectDensityFrame(*density, frameIndex);
+    if (!frame) {
+        return false;
+    }
+
+    DensityFieldData viewDensity = *density;
+    viewDensity.densities = *frame;
+
+    view3D_->setTriangles(feMeshDensityToTriangles(*mesh, viewDensity, threshold));
+    return true;
 }
 
 // ================================================================
