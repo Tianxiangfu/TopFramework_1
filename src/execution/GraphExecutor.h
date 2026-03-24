@@ -38,6 +38,7 @@ public:
     void previewNode(int nodeId);
     bool previewDensityViewFromCache(int nodeId);
     int cachedDensityFrameCountForNode(int nodeId) const;
+    const DensityFieldData* cachedDensityFieldForNode(int nodeId) const;
 
     // Helper: find param by name on a node
     const ParamDef* findParam(int nodeId, const std::string& name);

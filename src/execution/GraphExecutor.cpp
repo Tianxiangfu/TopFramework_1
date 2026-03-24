@@ -1737,6 +1737,10 @@ int GraphExecutor::cachedDensityFrameCountForNode(int nodeId) const {
     return density->densities.empty() ? 0 : 1;
 }
 
+const DensityFieldData* GraphExecutor::cachedDensityFieldForNode(int nodeId) const {
+    return findCachedDensityInput(nodeId);
+}
+
 bool GraphExecutor::previewDensityViewFromCache(int nodeId) {
     if (!editor_ || !view3D_) return false;
 

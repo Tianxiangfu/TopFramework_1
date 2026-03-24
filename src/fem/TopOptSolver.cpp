@@ -26,9 +26,19 @@ void storeDensitySnapshot(
 
 void appendDensityFrame(
     DensityFieldData& densityResult,
-    const std::vector<double>& densities)
+    const std::vector<double>& densities,
+    int iteration,
+    double objective,
+    double volFrac,
+    double maxChange)
 {
     densityResult.densityFrames.push_back(densities);
+    densityResult.frameInfo.push_back(DensityFrameInfo{
+        iteration,
+        objective,
+        volFrac,
+        maxChange
+    });
 }
 
 } // namespace
@@ -198,6 +208,7 @@ bool TopOptSolver::runSIMP() {
 
     densityResult_.history.clear();
     densityResult_.densityFrames.clear();
+    densityResult_.frameInfo.clear();
 
     FEMSolver solver;
     solver.setMesh(mesh_);
@@ -215,7 +226,13 @@ bool TopOptSolver::runSIMP() {
             solver.setLoadCase(lc);
             if (!solver.solve()) {
                 feResult_ = solver.result();
-                appendDensityFrame(densityResult_, x);
+                double currentVol = 0.0;
+                for (double xi : x) currentVol += xi;
+                currentVol = nElem > 0 ? currentVol / nElem : 0.0;
+                const int failureIteration = static_cast<int>(densityResult_.history.size());
+                const double lastObjective =
+                    densityResult_.history.empty() ? 0.0 : densityResult_.history.back();
+                appendDensityFrame(densityResult_, x, failureIteration, lastObjective, currentVol, 0.0);
                 storeDensitySnapshot(densityResult_, x);
                 return false;
             }
@@ -261,14 +278,14 @@ bool TopOptSolver::runSIMP() {
         for (double xi : x) currentVol += xi;
         currentVol /= nElem;
 
-        densityResult_.history.push_back(totalCompliance);
-        appendDensityFrame(densityResult_, x);
-
         // Convergence check
         double change = 0;
         for (int i = 0; i < nElem; i++) {
             change = std::max(change, std::abs(x[i] - xOld[i]));
         }
+
+        densityResult_.history.push_back(totalCompliance);
+        appendDensityFrame(densityResult_, x, iter + 1, totalCompliance, currentVol, change);
 
         if (iter > 10 && change < tolConverge) {
             break;

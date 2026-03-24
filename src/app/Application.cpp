@@ -960,7 +960,13 @@ void Application::drawDensityPlaybackControls() {
         return;
     }
 
-    const int frameCount = executor_ ? executor_->cachedDensityFrameCountForNode(selected->id) : 0;
+    const DensityFieldData* density =
+        executor_ ? executor_->cachedDensityFieldForNode(selected->id) : nullptr;
+    const int frameCount = density
+        ? (!density->densityFrames.empty()
+            ? static_cast<int>(density->densityFrames.size())
+            : (density->densities.empty() ? 0 : 1))
+        : 0;
     const int maxFrame = std::max(0, frameCount - 1);
     pFrame->intVal = std::clamp(pFrame->intVal, 0, maxFrame);
 
@@ -978,7 +984,7 @@ void Application::drawDensityPlaybackControls() {
 
     const bool animateEnabled = pAnimate && pAnimate->boolVal;
     if (!animateEnabled) {
-        ImGui::TextDisabled("Enable 'Animate' above to use the playback controls.");
+        ImGui::TextDisabled("Enable 'Animate' above to auto-play; the timeline can still scrub frames.");
     }
 
     if (!animateEnabled) ImGui::BeginDisabled();
@@ -998,13 +1004,27 @@ void Application::drawDensityPlaybackControls() {
         densityPlayback_.accumulator = 0.0f;
         pFrame->intVal = 0;
     }
+    if (!animateEnabled) ImGui::EndDisabled();
+
     int frameValue = pFrame->intVal;
-    if (ImGui::SliderInt("Playback Frame", &frameValue, 0, maxFrame)) {
+    if (ImGui::SliderInt("Timeline", &frameValue, 0, maxFrame)) {
         pFrame->intVal = frameValue;
         densityPlayback_.nodeId = selected->id;
         densityPlayback_.accumulator = 0.0f;
     }
-    if (!animateEnabled) ImGui::EndDisabled();
+
+    if (density && pFrame->intVal >= 0 &&
+        pFrame->intVal < static_cast<int>(density->frameInfo.size())) {
+        const DensityFrameInfo& info = density->frameInfo[pFrame->intVal];
+        ImGui::Text("Iteration: %d", info.iteration);
+        ImGui::Text("Objective: %.6g", info.objective);
+        ImGui::Text("VolFrac: %.4f", info.volFrac);
+        ImGui::Text("MaxChange: %.6g", info.maxChange);
+    } else if (density) {
+        ImGui::Text("Iteration: %d", pFrame->intVal + 1);
+        ImGui::Text("Objective: %.6g", density->objective);
+        ImGui::Text("VolFrac: %.4f", density->volFrac);
+    }
 }
 
 void Application::updateDensityPlayback() {

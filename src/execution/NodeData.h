@@ -84,6 +84,13 @@ struct FEResultData {
     std::string solverMessage;
 };
 
+struct DensityFrameInfo {
+    int iteration = 0;
+    double objective = 0.0;
+    double volFrac = 0.0;
+    double maxChange = 0.0;
+};
+
 struct DensityFieldData {
     std::vector<double> densities; // per element [0,1]
     double volFrac = 0;
@@ -91,6 +98,7 @@ struct DensityFieldData {
     int iteration = 0;
     std::vector<double> history; // objective history
     std::vector<std::vector<double>> densityFrames; // per-iteration density snapshots
+    std::vector<DensityFrameInfo> frameInfo; // per-iteration metadata
 };
 
 // ============================================================
