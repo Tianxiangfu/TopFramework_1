@@ -1,6 +1,7 @@
 #pragma once
 #include "../execution/NodeData.h"
 #include "FEMSolver.h"
+#include <cstddef>
 #include <vector>
 #include <functional>
 #include <utility>
@@ -34,9 +35,11 @@ public:
 private:
     // Density filter (sphere-weighted average)
     void applyDensityFilter(std::vector<double>& filtered, const std::vector<double>& raw);
+    void applyDensityFilterStructured(std::vector<double>& filtered, const std::vector<double>& raw);
 
     // Sensitivity filter
     void applySensitivityFilter(std::vector<double>& dc, const std::vector<double>& x);
+    void applySensitivityFilterStructured(std::vector<double>& dc, const std::vector<double>& x);
 
     // OC update
     void ocUpdate(std::vector<double>& x, const std::vector<double>& dc);
@@ -44,6 +47,8 @@ private:
     // Compute element centers for filtering
     void computeElementCenters();
     void buildFilterNeighborhood();
+    void buildStructuredFilterStencil();
+    bool canUseStructuredFilter() const;
 
     FEMeshData mesh_;
     MaterialData mat_;
@@ -53,6 +58,13 @@ private:
     // Element centers (for filter distance)
     std::vector<double> elemCenterX_, elemCenterY_, elemCenterZ_;
     std::vector<std::vector<std::pair<int, double>>> filterNeighbors_;
+    struct FilterStencilEntry {
+        int dx = 0;
+        int dy = 0;
+        int dz = 0;
+        double weight = 0.0;
+    };
+    std::vector<FilterStencilEntry> structuredFilterStencil_;
 
     DensityFieldData densityResult_;
     FEResultData feResult_;

@@ -50,6 +50,18 @@ void TopOptSolver::setMesh(const FEMeshData& mesh) { mesh_ = mesh; }
 void TopOptSolver::setMaterial(const MaterialData& mat) { mat_ = mat; }
 void TopOptSolver::setLoadCases(const std::vector<LoadCaseData>& lcs) { loadCases_ = lcs; }
 
+bool TopOptSolver::canUseStructuredFilter() const {
+    const auto& grid = mesh_.structuredHex;
+    const std::size_t expectedCellCount =
+        static_cast<std::size_t>(grid.nx) *
+        static_cast<std::size_t>(grid.ny) *
+        static_cast<std::size_t>(grid.nz);
+    return grid.enabled &&
+           grid.nx > 0 && grid.ny > 0 && grid.nz > 0 &&
+           grid.dx > 0.0 && grid.dy > 0.0 && grid.dz > 0.0 &&
+           grid.cellToElement.size() == expectedCellCount;
+}
+
 // ================================================================
 //  Compute element centers for filtering
 // ================================================================
@@ -75,6 +87,11 @@ void TopOptSolver::computeElementCenters() {
 }
 
 void TopOptSolver::buildFilterNeighborhood() {
+    if (canUseStructuredFilter()) {
+        filterNeighbors_.clear();
+        return;
+    }
+
     int nElem = (int)mesh_.elements.size();
     filterNeighbors_.assign(nElem, {});
     double rmin = filterRadius;
@@ -95,12 +112,47 @@ void TopOptSolver::buildFilterNeighborhood() {
     }
 }
 
+void TopOptSolver::buildStructuredFilterStencil() {
+    structuredFilterStencil_.clear();
+    if (!canUseStructuredFilter()) {
+        return;
+    }
+
+    const auto& grid = mesh_.structuredHex;
+    const int maxDx = static_cast<int>(std::ceil(filterRadius / grid.dx));
+    const int maxDy = static_cast<int>(std::ceil(filterRadius / grid.dy));
+    const int maxDz = static_cast<int>(std::ceil(filterRadius / grid.dz));
+    const double rmin2 = filterRadius * filterRadius;
+
+    for (int dz = -maxDz; dz <= maxDz; ++dz) {
+        for (int dy = -maxDy; dy <= maxDy; ++dy) {
+            for (int dx = -maxDx; dx <= maxDx; ++dx) {
+                const double ox = static_cast<double>(dx) * grid.dx;
+                const double oy = static_cast<double>(dy) * grid.dy;
+                const double oz = static_cast<double>(dz) * grid.dz;
+                const double dist2 = ox * ox + oy * oy + oz * oz;
+                if (dist2 >= rmin2) {
+                    continue;
+                }
+
+                structuredFilterStencil_.push_back(
+                    FilterStencilEntry{dx, dy, dz, filterRadius - std::sqrt(dist2)});
+            }
+        }
+    }
+}
+
 // ================================================================
 //  Density filter (sphere-weighted average)
 // ================================================================
 
 void TopOptSolver::applyDensityFilter(std::vector<double>& filtered,
                                        const std::vector<double>& raw) {
+    if (canUseStructuredFilter()) {
+        applyDensityFilterStructured(filtered, raw);
+        return;
+    }
+
     int nElem = (int)raw.size();
     filtered.resize(nElem);
 
@@ -114,12 +166,61 @@ void TopOptSolver::applyDensityFilter(std::vector<double>& filtered,
     }
 }
 
+void TopOptSolver::applyDensityFilterStructured(std::vector<double>& filtered,
+                                                const std::vector<double>& raw) {
+    const auto& grid = mesh_.structuredHex;
+    const int nElem = (int)raw.size();
+    filtered.resize(nElem);
+
+    for (int iz = 0; iz < grid.nz; ++iz) {
+        for (int iy = 0; iy < grid.ny; ++iy) {
+            for (int ix = 0; ix < grid.nx; ++ix) {
+                const int cellIdx = iz * grid.nx * grid.ny + iy * grid.nx + ix;
+                const int elemIdx = grid.cellToElement[cellIdx];
+                if (elemIdx < 0 || elemIdx >= nElem) {
+                    continue;
+                }
+
+                double sumW = 0.0;
+                double sumWx = 0.0;
+                for (const auto& entry : structuredFilterStencil_) {
+                    const int nix = ix + entry.dx;
+                    const int niy = iy + entry.dy;
+                    const int niz = iz + entry.dz;
+                    if (nix < 0 || nix >= grid.nx ||
+                        niy < 0 || niy >= grid.ny ||
+                        niz < 0 || niz >= grid.nz) {
+                        continue;
+                    }
+
+                    const int neighborCellIdx =
+                        niz * grid.nx * grid.ny + niy * grid.nx + nix;
+                    const int neighborElemIdx = grid.cellToElement[neighborCellIdx];
+                    if (neighborElemIdx < 0 || neighborElemIdx >= nElem) {
+                        continue;
+                    }
+
+                    sumW += entry.weight;
+                    sumWx += entry.weight * raw[neighborElemIdx];
+                }
+
+                filtered[elemIdx] = (sumW > 0.0) ? (sumWx / sumW) : raw[elemIdx];
+            }
+        }
+    }
+}
+
 // ================================================================
 //  Sensitivity filter
 // ================================================================
 
 void TopOptSolver::applySensitivityFilter(std::vector<double>& dc,
                                            const std::vector<double>& x) {
+    if (canUseStructuredFilter()) {
+        applySensitivityFilterStructured(dc, x);
+        return;
+    }
+
     int nElem = (int)dc.size();
     std::vector<double> dcOrig = dc;
 
@@ -131,6 +232,52 @@ void TopOptSolver::applySensitivityFilter(std::vector<double>& dc,
         }
         if (sumW > 0 && x[i] > 0) {
             dc[i] = sumWdc / (x[i] * sumW);
+        }
+    }
+}
+
+void TopOptSolver::applySensitivityFilterStructured(std::vector<double>& dc,
+                                                    const std::vector<double>& x) {
+    const auto& grid = mesh_.structuredHex;
+    const int nElem = (int)dc.size();
+    std::vector<double> dcOrig = dc;
+
+    for (int iz = 0; iz < grid.nz; ++iz) {
+        for (int iy = 0; iy < grid.ny; ++iy) {
+            for (int ix = 0; ix < grid.nx; ++ix) {
+                const int cellIdx = iz * grid.nx * grid.ny + iy * grid.nx + ix;
+                const int elemIdx = grid.cellToElement[cellIdx];
+                if (elemIdx < 0 || elemIdx >= nElem) {
+                    continue;
+                }
+
+                double sumW = 0.0;
+                double sumWdc = 0.0;
+                for (const auto& entry : structuredFilterStencil_) {
+                    const int nix = ix + entry.dx;
+                    const int niy = iy + entry.dy;
+                    const int niz = iz + entry.dz;
+                    if (nix < 0 || nix >= grid.nx ||
+                        niy < 0 || niy >= grid.ny ||
+                        niz < 0 || niz >= grid.nz) {
+                        continue;
+                    }
+
+                    const int neighborCellIdx =
+                        niz * grid.nx * grid.ny + niy * grid.nx + nix;
+                    const int neighborElemIdx = grid.cellToElement[neighborCellIdx];
+                    if (neighborElemIdx < 0 || neighborElemIdx >= nElem) {
+                        continue;
+                    }
+
+                    sumW += entry.weight;
+                    sumWdc += entry.weight * x[neighborElemIdx] * dcOrig[neighborElemIdx];
+                }
+
+                if (sumW > 0.0 && x[elemIdx] > 0.0) {
+                    dc[elemIdx] = sumWdc / (x[elemIdx] * sumW);
+                }
+            }
         }
     }
 }
@@ -187,7 +334,14 @@ bool TopOptSolver::runSIMP() {
     }
 
     int nElem = (int)mesh_.elements.size();
-    computeElementCenters();
+    buildStructuredFilterStencil();
+    if (!canUseStructuredFilter()) {
+        computeElementCenters();
+    } else {
+        elemCenterX_.clear();
+        elemCenterY_.clear();
+        elemCenterZ_.clear();
+    }
     buildFilterNeighborhood();
 
     // Initialize densities

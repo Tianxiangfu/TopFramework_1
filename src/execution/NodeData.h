@@ -28,12 +28,24 @@ struct GenericData { std::string description; };
 struct FENode { int id; double x, y, z; };
 struct FEElement { int id; std::vector<int> nodeIds; int type = 0; }; // 0=Hex8
 
+struct StructuredHexGridInfo {
+    bool enabled = false;
+    int nx = 0;
+    int ny = 0;
+    int nz = 0;
+    double dx = 0.0;
+    double dy = 0.0;
+    double dz = 0.0;
+    std::vector<int> cellToElement;
+};
+
 struct FEMeshData {
     std::vector<FENode> nodes;
     std::vector<FEElement> elements;
     std::map<std::string, std::vector<int>> nodeSets;
     std::map<std::string, std::vector<int>> elementSets;
     std::vector<int> passiveSolid, passiveVoid; // non-design regions
+    StructuredHexGridInfo structuredHex;
 };
 
 struct MaterialData {

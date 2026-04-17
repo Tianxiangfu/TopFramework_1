@@ -523,6 +523,14 @@ void GraphExecutor::evalDomainBox(int nodeId) {
     // Generate hex8 elements
     int elemCount = nx * ny * nz;
     mesh.elements.reserve(elemCount);
+    mesh.structuredHex.enabled = true;
+    mesh.structuredHex.nx = nx;
+    mesh.structuredHex.ny = ny;
+    mesh.structuredHex.nz = nz;
+    mesh.structuredHex.dx = dx;
+    mesh.structuredHex.dy = dy;
+    mesh.structuredHex.dz = dz;
+    mesh.structuredHex.cellToElement.resize(elemCount, -1);
     int eid = 0;
     for (int iz = 0; iz < nz; iz++) {
         for (int iy = 0; iy < ny; iy++) {
@@ -541,6 +549,8 @@ void GraphExecutor::evalDomainBox(int nodeId) {
                     nodeIndex(ix,   iy+1, iz+1)
                 };
                 mesh.elements.push_back(elem);
+                mesh.structuredHex.cellToElement[
+                    iz * nx * ny + iy * nx + ix] = elem.id;
             }
         }
     }
@@ -584,6 +594,14 @@ void GraphExecutor::evalDomainLShape(int nodeId) {
     FEMeshData mesh;
     int totalNodes = (nxTotal + 1) * (nyTotal + 1) * (nzTotal + 1);
     mesh.nodes.resize(totalNodes);
+    mesh.structuredHex.enabled = true;
+    mesh.structuredHex.nx = nxTotal;
+    mesh.structuredHex.ny = nyTotal;
+    mesh.structuredHex.nz = nzTotal;
+    mesh.structuredHex.dx = dx;
+    mesh.structuredHex.dy = dy;
+    mesh.structuredHex.dz = dz;
+    mesh.structuredHex.cellToElement.resize(nxTotal * nyTotal * nzTotal, -1);
 
     for (int iz = 0; iz <= nzTotal; iz++) {
         for (int iy = 0; iy <= nyTotal; iy++) {
@@ -616,6 +634,8 @@ void GraphExecutor::evalDomainLShape(int nodeId) {
                     nodeIndex(ix,   iy+1, iz+1)
                 };
                 mesh.elements.push_back(elem);
+                mesh.structuredHex.cellToElement[
+                    iz * nxTotal * nyTotal + iy * nxTotal + ix] = elem.id;
             }
         }
     }
