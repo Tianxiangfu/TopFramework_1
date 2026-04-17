@@ -9,8 +9,6 @@ namespace TopOpt {
 class CpuEigenSolverBackend : public FEMSolverBackend {
 public:
     bool solve(FEMSolver& solver, FEResultData& result) override {
-        solver.assembleGlobal();
-        solver.applyBCs();
         solver.K_.makeCompressed();
 
         auto start = std::chrono::steady_clock::now();
@@ -518,6 +516,7 @@ void FEMSolver::computeComplianceOnly() {
 
 bool FEMSolver::solve(bool computeDetailedResults) {
     result_ = FEResultData{};
+    const auto totalStart = std::chrono::steady_clock::now();
 
     if (mesh_.nodes.empty() || mesh_.elements.empty()) {
         result_.converged = false;
@@ -529,20 +528,43 @@ bool FEMSolver::solve(bool computeDetailedResults) {
         D_ = constitutiveD();
     }
 
+    const auto assemblyStart = std::chrono::steady_clock::now();
+    assembleGlobal();
+    const auto assemblyEnd = std::chrono::steady_clock::now();
+    result_.assemblyTimeMs =
+        std::chrono::duration<double, std::milli>(assemblyEnd - assemblyStart).count();
+
+    const auto bcStart = std::chrono::steady_clock::now();
+    applyBCs();
+    const auto bcEnd = std::chrono::steady_clock::now();
+    result_.boundaryConditionTimeMs =
+        std::chrono::duration<double, std::milli>(bcEnd - bcStart).count();
+
     bool ok = solveWithConfiguredBackend();
     if (!ok) {
         result_.converged = false;
         if (result_.backendUsed.empty()) {
             result_.backendUsed = "unavailable";
         }
+        const auto totalEnd = std::chrono::steady_clock::now();
+        result_.totalTimeMs =
+            std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
         return false;
     }
 
+    const auto postStart = std::chrono::steady_clock::now();
     if (computeDetailedResults) {
         computeResults();
     } else {
         computeComplianceOnly();
     }
+    const auto postEnd = std::chrono::steady_clock::now();
+    result_.postProcessTimeMs =
+        std::chrono::duration<double, std::milli>(postEnd - postStart).count();
+
+    const auto totalEnd = std::chrono::steady_clock::now();
+    result_.totalTimeMs =
+        std::chrono::duration<double, std::milli>(totalEnd - totalStart).count();
     result_.converged = true;
     return true;
 }

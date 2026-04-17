@@ -62,7 +62,11 @@ std::string solverSummary(const FEResultData& result) {
     std::ostringstream os;
     os << "backend=" << result.backendUsed
        << ", compliance=" << result.compliance
-       << ", timeMs=" << result.solveTimeMs
+       << ", solveMs=" << result.solveTimeMs
+       << ", assemblyMs=" << result.assemblyTimeMs
+       << ", bcMs=" << result.boundaryConditionTimeMs
+       << ", postMs=" << result.postProcessTimeMs
+       << ", totalMs=" << result.totalTimeMs
        << ", residual=" << result.residualNorm;
     if (result.usedFallback) {
         os << ", fallback=true";

@@ -79,6 +79,10 @@ struct FEResultData {
     std::string backendUsed = "cpu-direct";
     int iterationCount = 0;
     double solveTimeMs = 0.0;
+    double assemblyTimeMs = 0.0;
+    double boundaryConditionTimeMs = 0.0;
+    double postProcessTimeMs = 0.0;
+    double totalTimeMs = 0.0;
     bool usedFallback = false;
     double residualNorm = 0.0;
     std::string solverMessage;

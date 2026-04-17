@@ -1,7 +1,10 @@
 #include "TopOptSolver.h"
+#include "../utils/Logger.h"
+#include <chrono>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
+#include <sstream>
 
 namespace TopOpt {
 
@@ -210,12 +213,26 @@ bool TopOptSolver::runSIMP() {
     densityResult_.densityFrames.clear();
     densityResult_.frameInfo.clear();
 
+    double totalSolverMs = 0.0;
+    double totalAssemblyMs = 0.0;
+    double totalBcMs = 0.0;
+    double totalPostMs = 0.0;
+    double totalFilterMs = 0.0;
+    double totalOcMs = 0.0;
+    double totalIterationMs = 0.0;
+    int completedIterations = 0;
+
     FEMSolver solver;
     solver.setMesh(mesh_);
     solver.setMaterial(mat_);
     solver.setConfig(solverConfig_);
 
     for (int iter = 0; iter < maxIter; iter++) {
+        const auto iterStart = std::chrono::steady_clock::now();
+        double iterSolverMs = 0.0;
+        double iterAssemblyMs = 0.0;
+        double iterBcMs = 0.0;
+        double iterPostMs = 0.0;
         // Set densities and solve for each load case
         solver.setDensities(x, penalty, 1e-9 * mat_.E);
 
@@ -226,6 +243,14 @@ bool TopOptSolver::runSIMP() {
             solver.setLoadCase(lc);
             if (!solver.solve(false)) {
                 feResult_ = solver.result();
+                iterAssemblyMs += feResult_.assemblyTimeMs;
+                iterBcMs += feResult_.boundaryConditionTimeMs;
+                iterSolverMs += feResult_.solveTimeMs;
+                iterPostMs += feResult_.postProcessTimeMs;
+                totalAssemblyMs += feResult_.assemblyTimeMs;
+                totalBcMs += feResult_.boundaryConditionTimeMs;
+                totalSolverMs += feResult_.solveTimeMs;
+                totalPostMs += feResult_.postProcessTimeMs;
                 double currentVol = 0.0;
                 for (double xi : x) currentVol += xi;
                 currentVol = nElem > 0 ? currentVol / nElem : 0.0;
@@ -239,6 +264,14 @@ bool TopOptSolver::runSIMP() {
 
             // Accumulate compliance and sensitivity
             auto& res = solver.result();
+            iterAssemblyMs += res.assemblyTimeMs;
+            iterBcMs += res.boundaryConditionTimeMs;
+            iterSolverMs += res.solveTimeMs;
+            iterPostMs += res.postProcessTimeMs;
+            totalAssemblyMs += res.assemblyTimeMs;
+            totalBcMs += res.boundaryConditionTimeMs;
+            totalSolverMs += res.solveTimeMs;
+            totalPostMs += res.postProcessTimeMs;
             totalCompliance += lc.weight * res.compliance;
 
             // Sensitivity: dc/dx = -p * x^(p-1) * ue^T * K0e * ue
@@ -251,6 +284,7 @@ bool TopOptSolver::runSIMP() {
         }
 
         // Apply filter
+        const auto filterStart = std::chrono::steady_clock::now();
         if (filterType == 0) {
             // Density filter
             std::vector<double> xFiltered;
@@ -260,10 +294,19 @@ bool TopOptSolver::runSIMP() {
             // Sensitivity filter only
             applySensitivityFilter(dc, x);
         }
+        const auto filterEnd = std::chrono::steady_clock::now();
+        const double filterMs =
+            std::chrono::duration<double, std::milli>(filterEnd - filterStart).count();
+        totalFilterMs += filterMs;
 
         // OC update
         std::vector<double> xOld = x;
+        const auto ocStart = std::chrono::steady_clock::now();
         ocUpdate(x, dc);
+        const auto ocEnd = std::chrono::steady_clock::now();
+        const double ocMs =
+            std::chrono::duration<double, std::milli>(ocEnd - ocStart).count();
+        totalOcMs += ocMs;
 
         // Restore passive regions
         for (int eid : mesh_.passiveSolid) {
@@ -287,6 +330,25 @@ bool TopOptSolver::runSIMP() {
         densityResult_.history.push_back(totalCompliance);
         appendDensityFrame(densityResult_, x, iter + 1, totalCompliance, currentVol, change);
 
+        const auto iterEnd = std::chrono::steady_clock::now();
+        const double iterationMs =
+            std::chrono::duration<double, std::milli>(iterEnd - iterStart).count();
+        totalIterationMs += iterationMs;
+        completedIterations++;
+
+        std::ostringstream iterLog;
+        iterLog << "[TopOpt Timing] iter=" << (iter + 1)
+                << ", iterMs=" << iterationMs
+                << ", assemblyMs=" << iterAssemblyMs
+                << ", bcMs=" << iterBcMs
+                << ", solveMs=" << iterSolverMs
+                << ", postMs=" << iterPostMs
+                << ", filterMs=" << filterMs
+                << ", ocMs=" << ocMs
+                << ", compliance=" << totalCompliance
+                << ", change=" << change;
+        Logger::instance().info(iterLog.str());
+
         if (iter > 10 && change < tolConverge) {
             break;
         }
@@ -304,6 +366,23 @@ bool TopOptSolver::runSIMP() {
         return false;
     }
     feResult_ = solver.result();
+
+    std::ostringstream summary;
+    summary << "[TopOpt Timing] summary"
+            << ", iterations=" << completedIterations
+            << ", totalIterMs=" << totalIterationMs
+            << ", totalAssemblyMs=" << totalAssemblyMs
+            << ", totalBcMs=" << totalBcMs
+            << ", totalSolveMs=" << totalSolverMs
+            << ", totalPostMs=" << totalPostMs
+            << ", totalFilterMs=" << totalFilterMs
+            << ", totalOcMs=" << totalOcMs
+            << ", finalSolveAssemblyMs=" << feResult_.assemblyTimeMs
+            << ", finalSolveBcMs=" << feResult_.boundaryConditionTimeMs
+            << ", finalSolveMs=" << feResult_.solveTimeMs
+            << ", finalSolvePostMs=" << feResult_.postProcessTimeMs
+            << ", finalSolveTotalMs=" << feResult_.totalTimeMs;
+    Logger::instance().info(summary.str());
 
     return true;
 }

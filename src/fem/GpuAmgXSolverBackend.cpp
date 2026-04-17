@@ -200,8 +200,6 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
         return false;
     }
 
-    solver.assembleGlobal();
-    solver.applyBCs();
     solver.K_.makeCompressed();
 
     const int rows = solver.K_.rows();
