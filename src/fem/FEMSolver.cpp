@@ -75,6 +75,9 @@ void FEMSolver::setMesh(const FEMeshData& mesh) {
         keCacheValid_ = false;
         cachedMesh_ = FEMeshData{};
         keCache_.clear();
+        assemblyPatternValid_ = false;
+        assemblyValueIndices_.clear();
+        diagonalValueIndices_.clear();
     }
 }
 
@@ -208,6 +211,81 @@ void FEMSolver::rebuildCachesIfNeeded() {
     keCacheValid_ = true;
 }
 
+void FEMSolver::rebuildAssemblyPatternIfNeeded() {
+    const int nNodes = static_cast<int>(mesh_.nodes.size());
+    numDofs_ = nNodes * 3;
+
+    if (assemblyPatternValid_ && K_.rows() == numDofs_ && K_.cols() == numDofs_) {
+        return;
+    }
+
+    const int nElem = static_cast<int>(mesh_.elements.size());
+    std::vector<Eigen::Triplet<double>> triplets;
+    triplets.reserve(nElem * 24 * 24);
+
+    for (int e = 0; e < nElem; ++e) {
+        const auto& elem = mesh_.elements[e];
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                const int gi = elem.nodeIds[i] * 3;
+                const int gj = elem.nodeIds[j] * 3;
+                for (int di = 0; di < 3; ++di) {
+                    for (int dj = 0; dj < 3; ++dj) {
+                        triplets.emplace_back(gi + di, gj + dj, 0.0);
+                    }
+                }
+            }
+        }
+    }
+
+    K_.resize(numDofs_, numDofs_);
+    K_.setFromTriplets(triplets.begin(), triplets.end());
+    K_.makeCompressed();
+
+    assemblyValueIndices_.assign(nElem * 24 * 24, -1);
+    for (int e = 0; e < nElem; ++e) {
+        const auto& elem = mesh_.elements[e];
+        const int base = e * 24 * 24;
+        for (int i = 0; i < 8; ++i) {
+            for (int j = 0; j < 8; ++j) {
+                const int gi = elem.nodeIds[i] * 3;
+                const int gj = elem.nodeIds[j] * 3;
+                for (int di = 0; di < 3; ++di) {
+                    for (int dj = 0; dj < 3; ++dj) {
+                        const int row = gi + di;
+                        const int col = gj + dj;
+                        const int outerStart = K_.outerIndexPtr()[col];
+                        const int outerEnd = K_.outerIndexPtr()[col + 1];
+                        const int* innerBegin = K_.innerIndexPtr() + outerStart;
+                        const int* innerEnd = K_.innerIndexPtr() + outerEnd;
+                        const int* it = std::lower_bound(innerBegin, innerEnd, row);
+                        if (it == innerEnd || *it != row) {
+                            continue;
+                        }
+                        const int flatLocal = ((i * 3 + di) * 24) + (j * 3 + dj);
+                        assemblyValueIndices_[base + flatLocal] =
+                            static_cast<int>(it - K_.innerIndexPtr());
+                    }
+                }
+            }
+        }
+    }
+
+    diagonalValueIndices_.assign(numDofs_, -1);
+    for (int dof = 0; dof < numDofs_; ++dof) {
+        const int outerStart = K_.outerIndexPtr()[dof];
+        const int outerEnd = K_.outerIndexPtr()[dof + 1];
+        const int* innerBegin = K_.innerIndexPtr() + outerStart;
+        const int* innerEnd = K_.innerIndexPtr() + outerEnd;
+        const int* it = std::lower_bound(innerBegin, innerEnd, dof);
+        if (it != innerEnd && *it == dof) {
+            diagonalValueIndices_[dof] = static_cast<int>(it - K_.innerIndexPtr());
+        }
+    }
+
+    assemblyPatternValid_ = true;
+}
+
 Eigen::Matrix<double, 24, 24> FEMSolver::hex8Ke(int elemIdx) const {
     if (keCacheValid_ && elemIdx >= 0 && elemIdx < static_cast<int>(keCache_.size())) {
         return keCache_[elemIdx];
@@ -266,37 +344,28 @@ double FEMSolver::elementStrainEnergyFromReferenceKe(int elemIdx) const {
 }
 
 void FEMSolver::assembleGlobal() {
-    int nNodes = static_cast<int>(mesh_.nodes.size());
-    numDofs_ = nNodes * 3;
     rebuildCachesIfNeeded();
+    rebuildAssemblyPatternIfNeeded();
+
+    double* values = K_.valuePtr();
+    std::fill(values, values + K_.nonZeros(), 0.0);
 
     int nElem = static_cast<int>(mesh_.elements.size());
-    std::vector<Eigen::Triplet<double>> triplets;
-    triplets.reserve(nElem * 24 * 24);
-
     for (int e = 0; e < nElem; e++) {
         const auto& Ke0 = keCache_[e];
         const double scale = densityScaleForElement(e);
-        auto& elem = mesh_.elements[e];
+        const int base = e * 24 * 24;
 
-        for (int i = 0; i < 8; i++) {
-            for (int j = 0; j < 8; j++) {
-                int gi = elem.nodeIds[i] * 3;
-                int gj = elem.nodeIds[j] * 3;
-                for (int di = 0; di < 3; di++) {
-                    for (int dj = 0; dj < 3; dj++) {
-                        double val = Ke0(i * 3 + di, j * 3 + dj) * scale;
-                        if (std::abs(val) > 1e-20) {
-                            triplets.emplace_back(gi + di, gj + dj, val);
-                        }
-                    }
+        for (int localRow = 0; localRow < 24; ++localRow) {
+            for (int localCol = 0; localCol < 24; ++localCol) {
+                const int slot = assemblyValueIndices_[base + localRow * 24 + localCol];
+                if (slot < 0) {
+                    continue;
                 }
+                values[slot] += Ke0(localRow, localCol) * scale;
             }
         }
     }
-
-    K_.resize(numDofs_, numDofs_);
-    K_.setFromTriplets(triplets.begin(), triplets.end());
 }
 
 void FEMSolver::applyBCs() {
@@ -341,7 +410,13 @@ void FEMSolver::applyBCs() {
 
     for (int i = 0; i < numDofs_; i++) {
         if (fixedDof_[i]) {
-            K_.coeffRef(i, i) += bigNum;
+            const int diagIdx =
+                (i < static_cast<int>(diagonalValueIndices_.size())) ? diagonalValueIndices_[i] : -1;
+            if (diagIdx >= 0) {
+                K_.valuePtr()[diagIdx] += bigNum;
+            } else {
+                K_.coeffRef(i, i) += bigNum;
+            }
         }
     }
 }

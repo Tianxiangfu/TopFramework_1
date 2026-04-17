@@ -3,6 +3,7 @@
 #include <Eigen/Sparse>
 #include <Eigen/Dense>
 #include <memory>
+#include <cstdint>
 #include <vector>
 
 namespace TopOpt {
@@ -71,6 +72,7 @@ private:
     void assembleGlobal();
     double densityScaleForElement(int elemIdx) const;
     void rebuildCachesIfNeeded();
+    void rebuildAssemblyPatternIfNeeded();
     bool solveWithConfiguredBackend();
     void computeResults();
     void computeComplianceOnly();
@@ -102,6 +104,9 @@ private:
     std::vector<Eigen::Matrix<double, 24, 24>> keCache_;
     bool keCacheValid_ = false;
     FEMeshData cachedMesh_;
+    bool assemblyPatternValid_ = false;
+    std::vector<int> assemblyValueIndices_;
+    std::vector<int> diagonalValueIndices_;
 
     // DOF mapping: node i -> dofs 3*i, 3*i+1, 3*i+2
     // Constrained DOFs

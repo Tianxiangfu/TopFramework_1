@@ -113,6 +113,7 @@ public:
         checkAmgx(AMGX_vector_create(&b_, rsrc_, AMGX_mode_dDDI), "AMGX_vector_create(b)");
         checkAmgx(AMGX_vector_create(&x_, rsrc_, AMGX_mode_dDDI), "AMGX_vector_create(x)");
         checkAmgx(AMGX_solver_create(&solver_, rsrc_, AMGX_mode_dDDI, cfg_), "AMGX_solver_create");
+        uploadedStructure_ = false;
     }
 
     void reset() {
@@ -131,6 +132,7 @@ public:
         cfg_ = nullptr;
         rows_ = 0;
         nnz_ = 0;
+        uploadedStructure_ = false;
         configPath_.clear();
         overrides_.clear();
     }
@@ -139,6 +141,8 @@ public:
     AMGX_vector_handle rhs() const { return b_; }
     AMGX_vector_handle solution() const { return x_; }
     AMGX_solver_handle solver() const { return solver_; }
+    bool uploadedStructure() const { return uploadedStructure_; }
+    void setUploadedStructure(bool value) { uploadedStructure_ = value; }
 
 private:
     std::filesystem::path configPath_;
@@ -151,6 +155,7 @@ private:
     AMGX_vector_handle b_ = nullptr;
     AMGX_vector_handle x_ = nullptr;
     AMGX_solver_handle solver_ = nullptr;
+    bool uploadedStructure_ = false;
 };
 
 CachedAmgxSession& cachedSession() {
@@ -222,24 +227,40 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
         const auto* colIdx = solver.K_.innerIndexPtr();
         const auto* values = solver.K_.valuePtr();
 
-        TOPFRAME_AMGX_CALL(AMGX_matrix_upload_all(
-            session.matrix(),
-            rows,
-            nnz,
-            1,
-            1,
-            rowPtr,
-            colIdx,
-            values,
-            nullptr
-        ));
+        const bool hadUploadedStructure = session.uploadedStructure();
+        if (!hadUploadedStructure) {
+            TOPFRAME_AMGX_CALL(AMGX_matrix_upload_all(
+                session.matrix(),
+                rows,
+                nnz,
+                1,
+                1,
+                rowPtr,
+                colIdx,
+                values,
+                nullptr
+            ));
+            session.setUploadedStructure(true);
+        } else {
+            TOPFRAME_AMGX_CALL(AMGX_matrix_replace_coefficients(
+                session.matrix(),
+                rows,
+                nnz,
+                values,
+                nullptr
+            ));
+        }
 
         TOPFRAME_AMGX_CALL(AMGX_vector_bind(session.rhs(), session.matrix()));
         TOPFRAME_AMGX_CALL(AMGX_vector_bind(session.solution(), session.matrix()));
         TOPFRAME_AMGX_CALL(AMGX_vector_upload(session.rhs(), rows, 1, solver.F_.data()));
         TOPFRAME_AMGX_CALL(AMGX_vector_upload(session.solution(), rows, 1, solver.U_.data()));
 
-        TOPFRAME_AMGX_CALL(AMGX_solver_setup(session.solver(), session.matrix()));
+        if (hadUploadedStructure) {
+            TOPFRAME_AMGX_CALL(AMGX_solver_resetup(session.solver(), session.matrix()));
+        } else {
+            TOPFRAME_AMGX_CALL(AMGX_solver_setup(session.solver(), session.matrix()));
+        }
         TOPFRAME_AMGX_CALL(AMGX_solver_solve(session.solver(), session.rhs(), session.solution()));
         TOPFRAME_AMGX_CALL(AMGX_vector_download(session.solution(), solver.U_.data()));
 
