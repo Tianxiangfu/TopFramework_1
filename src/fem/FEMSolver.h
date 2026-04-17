@@ -29,7 +29,7 @@ public:
     void setDensities(const std::vector<double>& densities, double penalty = 3.0, double Emin = 1e-9);
 
     // Solve the system
-    bool solve();
+    bool solve(bool computeDetailedResults = true);
 
     // Get results
     const FEResultData& result() const { return result_; }
@@ -73,6 +73,7 @@ private:
     void rebuildCachesIfNeeded();
     bool solveWithConfiguredBackend();
     void computeResults();
+    void computeComplianceOnly();
 
     // Apply boundary conditions
     void applyBCs();

@@ -423,7 +423,25 @@ void FEMSolver::computeResults() {
     }
 }
 
-bool FEMSolver::solve() {
+void FEMSolver::computeComplianceOnly() {
+    const int nElem = static_cast<int>(mesh_.elements.size());
+
+    result_.dispX.clear();
+    result_.dispY.clear();
+    result_.dispZ.clear();
+    result_.vonMises.clear();
+    result_.strainEnergy.clear();
+    result_.strainEnergy.resize(nElem);
+    result_.compliance = 0.0;
+
+    for (int e = 0; e < nElem; e++) {
+        const double ce = elementStrainEnergyFromReferenceKe(e);
+        result_.strainEnergy[e] = ce;
+        result_.compliance += densityScaleForElement(e) * ce;
+    }
+}
+
+bool FEMSolver::solve(bool computeDetailedResults) {
     result_ = FEResultData{};
 
     if (mesh_.nodes.empty() || mesh_.elements.empty()) {
@@ -445,7 +463,11 @@ bool FEMSolver::solve() {
         return false;
     }
 
-    computeResults();
+    if (computeDetailedResults) {
+        computeResults();
+    } else {
+        computeComplianceOnly();
+    }
     result_.converged = true;
     return true;
 }

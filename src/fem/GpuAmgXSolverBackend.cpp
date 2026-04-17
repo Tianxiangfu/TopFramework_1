@@ -10,6 +10,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <sstream>
 
@@ -60,6 +61,93 @@ public:
     AmgxScope(const AmgxScope&) = delete;
     AmgxScope& operator=(const AmgxScope&) = delete;
 };
+
+AmgxScope& globalAmgxScope() {
+    static AmgxScope scope;
+    return scope;
+}
+
+class CachedAmgxSession {
+public:
+    CachedAmgxSession() = default;
+
+    ~CachedAmgxSession() {
+        reset();
+    }
+
+    void ensure(const std::filesystem::path& configPath,
+                const std::string& overrides,
+                int rows,
+                int nnz) {
+        const bool mustRebuild =
+            !cfg_ ||
+            configPath_ != configPath ||
+            overrides_ != overrides ||
+            rows_ != rows ||
+            nnz_ != nnz;
+
+        if (!mustRebuild) {
+            return;
+        }
+
+        reset();
+
+        configPath_ = configPath;
+        overrides_ = overrides;
+        rows_ = rows;
+        nnz_ = nnz;
+
+        checkAmgx(AMGX_config_create_from_file(&cfg_, configPath.string().c_str()), "AMGX_config_create_from_file");
+        checkAmgx(AMGX_config_add_parameters(&cfg_, overrides.c_str()), "AMGX_config_add_parameters");
+        checkAmgx(AMGX_resources_create_simple(&rsrc_, cfg_), "AMGX_resources_create_simple");
+        checkAmgx(AMGX_matrix_create(&A_, rsrc_, AMGX_mode_dDDI), "AMGX_matrix_create");
+        checkAmgx(AMGX_vector_create(&b_, rsrc_, AMGX_mode_dDDI), "AMGX_vector_create(b)");
+        checkAmgx(AMGX_vector_create(&x_, rsrc_, AMGX_mode_dDDI), "AMGX_vector_create(x)");
+        checkAmgx(AMGX_solver_create(&solver_, rsrc_, AMGX_mode_dDDI, cfg_), "AMGX_solver_create");
+    }
+
+    void reset() {
+        if (solver_) AMGX_solver_destroy(solver_);
+        if (x_) AMGX_vector_destroy(x_);
+        if (b_) AMGX_vector_destroy(b_);
+        if (A_) AMGX_matrix_destroy(A_);
+        if (rsrc_) AMGX_resources_destroy(rsrc_);
+        if (cfg_) AMGX_config_destroy(cfg_);
+
+        solver_ = nullptr;
+        x_ = nullptr;
+        b_ = nullptr;
+        A_ = nullptr;
+        rsrc_ = nullptr;
+        cfg_ = nullptr;
+        rows_ = 0;
+        nnz_ = 0;
+        configPath_.clear();
+        overrides_.clear();
+    }
+
+    AMGX_matrix_handle matrix() const { return A_; }
+    AMGX_vector_handle rhs() const { return b_; }
+    AMGX_vector_handle solution() const { return x_; }
+    AMGX_solver_handle solver() const { return solver_; }
+
+private:
+    std::filesystem::path configPath_;
+    std::string overrides_;
+    int rows_ = 0;
+    int nnz_ = 0;
+    AMGX_config_handle cfg_ = nullptr;
+    AMGX_resources_handle rsrc_ = nullptr;
+    AMGX_matrix_handle A_ = nullptr;
+    AMGX_vector_handle b_ = nullptr;
+    AMGX_vector_handle x_ = nullptr;
+    AMGX_solver_handle solver_ = nullptr;
+};
+
+CachedAmgxSession& cachedSession() {
+    static CachedAmgxSession session;
+    return session;
+}
 
 void checkAmgx(AMGX_RC rc, const char* call) {
     if (rc == AMGX_RC_OK) {
@@ -122,32 +210,11 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
     const auto start = std::chrono::steady_clock::now();
 
     try {
-        AmgxScope amgxScope;
-
-        AMGX_config_handle cfg = nullptr;
-        AMGX_resources_handle rsrc = nullptr;
-        AMGX_matrix_handle A = nullptr;
-        AMGX_vector_handle b = nullptr;
-        AMGX_vector_handle x = nullptr;
-        AMGX_solver_handle amgxSolver = nullptr;
-        auto cleanup = [&]() {
-            if (amgxSolver) AMGX_solver_destroy(amgxSolver);
-            if (x) AMGX_vector_destroy(x);
-            if (b) AMGX_vector_destroy(b);
-            if (A) AMGX_matrix_destroy(A);
-            if (rsrc) AMGX_resources_destroy(rsrc);
-            if (cfg) AMGX_config_destroy(cfg);
-        };
+        (void)globalAmgxScope();
 
         const std::string overrides = normalizeConfigOverrides(config_);
-
-        TOPFRAME_AMGX_CALL(AMGX_config_create_from_file(&cfg, configPath.string().c_str()));
-        TOPFRAME_AMGX_CALL(AMGX_config_add_parameters(&cfg, overrides.c_str()));
-        TOPFRAME_AMGX_CALL(AMGX_resources_create_simple(&rsrc, cfg));
-        TOPFRAME_AMGX_CALL(AMGX_matrix_create(&A, rsrc, AMGX_mode_dDDI));
-        TOPFRAME_AMGX_CALL(AMGX_vector_create(&b, rsrc, AMGX_mode_dDDI));
-        TOPFRAME_AMGX_CALL(AMGX_vector_create(&x, rsrc, AMGX_mode_dDDI));
-        TOPFRAME_AMGX_CALL(AMGX_solver_create(&amgxSolver, rsrc, AMGX_mode_dDDI, cfg));
+        CachedAmgxSession& session = cachedSession();
+        session.ensure(configPath, overrides, rows, nnz);
 
         solver.U_ = Eigen::VectorXd::Zero(rows);
 
@@ -156,7 +223,7 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
         const auto* values = solver.K_.valuePtr();
 
         TOPFRAME_AMGX_CALL(AMGX_matrix_upload_all(
-            A,
+            session.matrix(),
             rows,
             nnz,
             1,
@@ -167,17 +234,17 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
             nullptr
         ));
 
-        TOPFRAME_AMGX_CALL(AMGX_vector_bind(b, A));
-        TOPFRAME_AMGX_CALL(AMGX_vector_bind(x, A));
-        TOPFRAME_AMGX_CALL(AMGX_vector_upload(b, rows, 1, solver.F_.data()));
-        TOPFRAME_AMGX_CALL(AMGX_vector_upload(x, rows, 1, solver.U_.data()));
+        TOPFRAME_AMGX_CALL(AMGX_vector_bind(session.rhs(), session.matrix()));
+        TOPFRAME_AMGX_CALL(AMGX_vector_bind(session.solution(), session.matrix()));
+        TOPFRAME_AMGX_CALL(AMGX_vector_upload(session.rhs(), rows, 1, solver.F_.data()));
+        TOPFRAME_AMGX_CALL(AMGX_vector_upload(session.solution(), rows, 1, solver.U_.data()));
 
-        TOPFRAME_AMGX_CALL(AMGX_solver_setup(amgxSolver, A));
-        TOPFRAME_AMGX_CALL(AMGX_solver_solve(amgxSolver, b, x));
-        TOPFRAME_AMGX_CALL(AMGX_vector_download(x, solver.U_.data()));
+        TOPFRAME_AMGX_CALL(AMGX_solver_setup(session.solver(), session.matrix()));
+        TOPFRAME_AMGX_CALL(AMGX_solver_solve(session.solver(), session.rhs(), session.solution()));
+        TOPFRAME_AMGX_CALL(AMGX_vector_download(session.solution(), solver.U_.data()));
 
         AMGX_SOLVE_STATUS status = AMGX_SOLVE_FAILED;
-        TOPFRAME_AMGX_CALL(AMGX_solver_get_status(amgxSolver, &status));
+        TOPFRAME_AMGX_CALL(AMGX_solver_get_status(session.solver(), &status));
         if (status != AMGX_SOLVE_SUCCESS) {
             result.converged = false;
             result.solverMessage =
@@ -187,14 +254,12 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
             result.solverMessage = "Solved with NVIDIA AmgX";
         }
 
-        TOPFRAME_AMGX_CALL(AMGX_solver_get_iterations_number(amgxSolver, &result.iterationCount));
+        TOPFRAME_AMGX_CALL(AMGX_solver_get_iterations_number(session.solver(), &result.iterationCount));
 
         const auto end = std::chrono::steady_clock::now();
         result.solveTimeMs =
             std::chrono::duration<double, std::milli>(end - start).count();
         result.residualNorm = (solver.K_ * solver.U_ - solver.F_).norm();
-
-        cleanup();
         return result.converged;
     } catch (const std::exception& ex) {
         result.converged = false;

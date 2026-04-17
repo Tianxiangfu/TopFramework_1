@@ -224,7 +224,7 @@ bool TopOptSolver::runSIMP() {
 
         for (auto& lc : loadCases_) {
             solver.setLoadCase(lc);
-            if (!solver.solve()) {
+            if (!solver.solve(false)) {
                 feResult_ = solver.result();
                 double currentVol = 0.0;
                 for (double xi : x) currentVol += xi;
@@ -298,7 +298,7 @@ bool TopOptSolver::runSIMP() {
     // Final FEA solve for result output
     solver.setDensities(x, penalty, 1e-9 * mat_.E);
     solver.setLoadCase(loadCases_[0]);
-    if (!solver.solve()) {
+    if (!solver.solve(true)) {
         feResult_ = solver.result();
         storeDensitySnapshot(densityResult_, x);
         return false;
