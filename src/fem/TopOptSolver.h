@@ -47,6 +47,7 @@ private:
     // Compute element centers for filtering
     void computeElementCenters();
     void buildFilterNeighborhood();
+    void compressFilterNeighborhood();
     void buildStructuredFilterStencil();
     bool canUseStructuredFilter() const;
 
@@ -58,6 +59,9 @@ private:
     // Element centers (for filter distance)
     std::vector<double> elemCenterX_, elemCenterY_, elemCenterZ_;
     std::vector<std::vector<std::pair<int, double>>> filterNeighbors_;
+    std::vector<int> filterNeighborOffsets_;
+    std::vector<int> filterNeighborIndices_;
+    std::vector<double> filterNeighborWeights_;
     struct FilterStencilEntry {
         int dx = 0;
         int dy = 0;

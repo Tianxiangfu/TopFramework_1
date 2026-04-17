@@ -149,6 +149,33 @@ void TopOptSolver::buildFilterNeighborhood() {
     }
 }
 
+void TopOptSolver::compressFilterNeighborhood() {
+    const int nElem = static_cast<int>(filterNeighbors_.size());
+    filterNeighborOffsets_.assign(nElem + 1, 0);
+
+    std::size_t totalNeighbors = 0;
+    for (int i = 0; i < nElem; ++i) {
+        filterNeighborOffsets_[i] = static_cast<int>(totalNeighbors);
+        totalNeighbors += filterNeighbors_[i].size();
+    }
+    filterNeighborOffsets_[nElem] = static_cast<int>(totalNeighbors);
+
+    filterNeighborIndices_.resize(totalNeighbors);
+    filterNeighborWeights_.resize(totalNeighbors);
+
+    std::size_t cursor = 0;
+    for (int i = 0; i < nElem; ++i) {
+        for (const auto& [j, w] : filterNeighbors_[i]) {
+            filterNeighborIndices_[cursor] = j;
+            filterNeighborWeights_[cursor] = w;
+            ++cursor;
+        }
+    }
+
+    filterNeighbors_.clear();
+    filterNeighbors_.shrink_to_fit();
+}
+
 void TopOptSolver::buildStructuredFilterStencil() {
     structuredFilterStencil_.clear();
     if (!canUseStructuredFilter()) {
@@ -188,9 +215,16 @@ void TopOptSolver::applyDensityFilter(std::vector<double>& filtered,
     int nElem = (int)raw.size();
     filtered.resize(nElem);
 
+    #if defined(_OPENMP)
+    #pragma omp parallel for
+    #endif
     for (int i = 0; i < nElem; i++) {
         double sumW = 0, sumWx = 0;
-        for (const auto& [j, w] : filterNeighbors_[i]) {
+        const int begin = filterNeighborOffsets_[i];
+        const int end = filterNeighborOffsets_[i + 1];
+        for (int k = begin; k < end; ++k) {
+            const int j = filterNeighborIndices_[k];
+            const double w = filterNeighborWeights_[k];
             sumW  += w;
             sumWx += w * raw[j];
         }
@@ -251,9 +285,16 @@ void TopOptSolver::applySensitivityFilter(std::vector<double>& dc,
     int nElem = (int)dc.size();
     std::vector<double> dcOrig = dc;
 
+    #if defined(_OPENMP)
+    #pragma omp parallel for
+    #endif
     for (int i = 0; i < nElem; i++) {
         double sumW = 0, sumWdc = 0;
-        for (const auto& [j, w] : filterNeighbors_[i]) {
+        const int begin = filterNeighborOffsets_[i];
+        const int end = filterNeighborOffsets_[i + 1];
+        for (int k = begin; k < end; ++k) {
+            const int j = filterNeighborIndices_[k];
+            const double w = filterNeighborWeights_[k];
             sumW   += w;
             sumWdc += w * x[j] * dcOrig[j];
         }
@@ -370,6 +411,7 @@ bool TopOptSolver::runSIMP() {
         elemCenterZ_.clear();
     }
     buildFilterNeighborhood();
+    compressFilterNeighborhood();
 
     // Initialize densities
     std::vector<double> x(nElem, volFrac);
@@ -399,6 +441,8 @@ bool TopOptSolver::runSIMP() {
     double totalBcMs = 0.0;
     double totalPostMs = 0.0;
     double totalFilterMs = 0.0;
+    double totalDensityFilterMs = 0.0;
+    double totalSensitivityFilterMs = 0.0;
     double totalOcMs = 0.0;
     double totalIterationMs = 0.0;
     int completedIterations = 0;
@@ -465,20 +509,40 @@ bool TopOptSolver::runSIMP() {
         }
 
         // Apply filter
+        double densityFilterMs = 0.0;
+        double sensitivityFilterMs = 0.0;
         const auto filterStart = std::chrono::steady_clock::now();
         if (filterType == 0) {
             // Density filter
             std::vector<double> xFiltered;
+            const auto densityFilterStart = std::chrono::steady_clock::now();
             applyDensityFilter(xFiltered, x);
+            const auto densityFilterEnd = std::chrono::steady_clock::now();
+            densityFilterMs =
+                std::chrono::duration<double, std::milli>(
+                    densityFilterEnd - densityFilterStart).count();
+
+            const auto sensitivityFilterStart = std::chrono::steady_clock::now();
             applySensitivityFilter(dc, xFiltered);
+            const auto sensitivityFilterEnd = std::chrono::steady_clock::now();
+            sensitivityFilterMs =
+                std::chrono::duration<double, std::milli>(
+                    sensitivityFilterEnd - sensitivityFilterStart).count();
         } else {
             // Sensitivity filter only
+            const auto sensitivityFilterStart = std::chrono::steady_clock::now();
             applySensitivityFilter(dc, x);
+            const auto sensitivityFilterEnd = std::chrono::steady_clock::now();
+            sensitivityFilterMs =
+                std::chrono::duration<double, std::milli>(
+                    sensitivityFilterEnd - sensitivityFilterStart).count();
         }
         const auto filterEnd = std::chrono::steady_clock::now();
         const double filterMs =
             std::chrono::duration<double, std::milli>(filterEnd - filterStart).count();
         totalFilterMs += filterMs;
+        totalDensityFilterMs += densityFilterMs;
+        totalSensitivityFilterMs += sensitivityFilterMs;
 
         // OC update
         std::vector<double> xOld = x;
@@ -525,6 +589,8 @@ bool TopOptSolver::runSIMP() {
                 << ", solveMs=" << iterSolverMs
                 << ", postMs=" << iterPostMs
                 << ", filterMs=" << filterMs
+                << ", densityFilterMs=" << densityFilterMs
+                << ", sensitivityFilterMs=" << sensitivityFilterMs
                 << ", ocMs=" << ocMs
                 << ", compliance=" << totalCompliance
                 << ", change=" << change;
@@ -557,6 +623,8 @@ bool TopOptSolver::runSIMP() {
             << ", totalSolveMs=" << totalSolverMs
             << ", totalPostMs=" << totalPostMs
             << ", totalFilterMs=" << totalFilterMs
+            << ", totalDensityFilterMs=" << totalDensityFilterMs
+            << ", totalSensitivityFilterMs=" << totalSensitivityFilterMs
             << ", totalOcMs=" << totalOcMs
             << ", finalSolveAssemblyMs=" << feResult_.assemblyTimeMs
             << ", finalSolveBcMs=" << feResult_.boundaryConditionTimeMs

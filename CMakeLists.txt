@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(TOPFRAME_ENABLE_AMGX "Enable NVIDIA AmgX backend if dependency is available" ON)
 
+find_package(OpenMP)
+
 # ============================================================
 #  Fetch Dependencies
 # ============================================================
@@ -110,6 +112,10 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     comdlg32
 )
 
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(${PROJECT_NAME} PRIVATE OpenMP::OpenMP_CXX)
+endif()
+
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     TOPFRAME_DEFAULT_AMGX_CONFIG_REL="configs/amgx/default.json"
 )
@@ -187,6 +193,10 @@ target_include_directories(topframe_gpu_amgx_smoke PRIVATE
 target_link_libraries(topframe_gpu_amgx_smoke PRIVATE
     Eigen3::Eigen
 )
+
+if(OpenMP_CXX_FOUND)
+    target_link_libraries(topframe_gpu_amgx_smoke PRIVATE OpenMP::OpenMP_CXX)
+endif()
 
 target_compile_definitions(topframe_gpu_amgx_smoke PRIVATE
     TOPFRAME_DEFAULT_AMGX_CONFIG_REL="configs/amgx/default.json"
