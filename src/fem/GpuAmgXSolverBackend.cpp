@@ -67,6 +67,15 @@ AmgxScope& globalAmgxScope() {
     return scope;
 }
 
+void checkAmgx(AMGX_RC rc, const char* call) {
+    if (rc == AMGX_RC_OK) {
+        return;
+    }
+    std::ostringstream os;
+    os << call << " failed with code " << static_cast<int>(rc);
+    throw std::runtime_error(os.str());
+}
+
 class CachedAmgxSession {
 public:
     CachedAmgxSession() = default;
@@ -147,15 +156,6 @@ private:
 CachedAmgxSession& cachedSession() {
     static CachedAmgxSession session;
     return session;
-}
-
-void checkAmgx(AMGX_RC rc, const char* call) {
-    if (rc == AMGX_RC_OK) {
-        return;
-    }
-    std::ostringstream os;
-    os << call << " failed with code " << static_cast<int>(rc);
-    throw std::runtime_error(os.str());
 }
 
 const char* statusToString(AMGX_SOLVE_STATUS status) {
