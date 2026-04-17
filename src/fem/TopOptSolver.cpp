@@ -88,7 +88,44 @@ void TopOptSolver::computeElementCenters() {
 
 void TopOptSolver::buildFilterNeighborhood() {
     if (canUseStructuredFilter()) {
-        filterNeighbors_.clear();
+        const auto& grid = mesh_.structuredHex;
+        const int nElem = (int)mesh_.elements.size();
+        filterNeighbors_.assign(nElem, {});
+
+        for (int iz = 0; iz < grid.nz; ++iz) {
+            for (int iy = 0; iy < grid.ny; ++iy) {
+                for (int ix = 0; ix < grid.nx; ++ix) {
+                    const int cellIdx = iz * grid.nx * grid.ny + iy * grid.nx + ix;
+                    const int elemIdx = grid.cellToElement[cellIdx];
+                    if (elemIdx < 0 || elemIdx >= nElem) {
+                        continue;
+                    }
+
+                    auto& neighbors = filterNeighbors_[elemIdx];
+                    neighbors.reserve(structuredFilterStencil_.size());
+
+                    for (const auto& entry : structuredFilterStencil_) {
+                        const int nix = ix + entry.dx;
+                        const int niy = iy + entry.dy;
+                        const int niz = iz + entry.dz;
+                        if (nix < 0 || nix >= grid.nx ||
+                            niy < 0 || niy >= grid.ny ||
+                            niz < 0 || niz >= grid.nz) {
+                            continue;
+                        }
+
+                        const int neighborCellIdx =
+                            niz * grid.nx * grid.ny + niy * grid.nx + nix;
+                        const int neighborElemIdx = grid.cellToElement[neighborCellIdx];
+                        if (neighborElemIdx < 0 || neighborElemIdx >= nElem) {
+                            continue;
+                        }
+
+                        neighbors.emplace_back(neighborElemIdx, entry.weight);
+                    }
+                }
+            }
+        }
         return;
     }
 
@@ -148,11 +185,6 @@ void TopOptSolver::buildStructuredFilterStencil() {
 
 void TopOptSolver::applyDensityFilter(std::vector<double>& filtered,
                                        const std::vector<double>& raw) {
-    if (canUseStructuredFilter()) {
-        applyDensityFilterStructured(filtered, raw);
-        return;
-    }
-
     int nElem = (int)raw.size();
     filtered.resize(nElem);
 
@@ -216,11 +248,6 @@ void TopOptSolver::applyDensityFilterStructured(std::vector<double>& filtered,
 
 void TopOptSolver::applySensitivityFilter(std::vector<double>& dc,
                                            const std::vector<double>& x) {
-    if (canUseStructuredFilter()) {
-        applySensitivityFilterStructured(dc, x);
-        return;
-    }
-
     int nElem = (int)dc.size();
     std::vector<double> dcOrig = dc;
 
