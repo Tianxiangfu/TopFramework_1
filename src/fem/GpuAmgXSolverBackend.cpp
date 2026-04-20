@@ -219,7 +219,9 @@ bool GpuAmgXSolverBackend::solve(FEMSolver& solver, FEResultData& result) {
         CachedAmgxSession& session = cachedSession();
         session.ensure(configPath, overrides, rows, nnz);
 
-        solver.U_ = Eigen::VectorXd::Zero(rows);
+        if (solver.U_.size() != rows) {
+            solver.U_ = Eigen::VectorXd::Zero(rows);
+        }
 
         const auto* rowPtr = solver.K_.outerIndexPtr();
         const auto* colIdx = solver.K_.innerIndexPtr();

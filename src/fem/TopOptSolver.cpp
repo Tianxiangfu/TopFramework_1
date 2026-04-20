@@ -44,6 +44,23 @@ void appendDensityFrame(
     });
 }
 
+bool usesGpuLikeSolve(const FESolverConfig& config) {
+    return config.gpuEnabled &&
+           (config.backend == SolverBackend::Auto ||
+            config.backend == SolverBackend::GPU_AmgX);
+}
+
+FESolverConfig intermediateSolverConfig(const FESolverConfig& baseConfig) {
+    FESolverConfig relaxed = baseConfig;
+    if (!usesGpuLikeSolve(relaxed)) {
+        return relaxed;
+    }
+
+    relaxed.maxIterations = std::min(relaxed.maxIterations, 200);
+    relaxed.tolerance = std::max(relaxed.tolerance, 1e-4);
+    return relaxed;
+}
+
 } // namespace
 
 void TopOptSolver::setMesh(const FEMeshData& mesh) { mesh_ = mesh; }
@@ -450,7 +467,8 @@ bool TopOptSolver::runSIMP() {
     FEMSolver solver;
     solver.setMesh(mesh_);
     solver.setMaterial(mat_);
-    solver.setConfig(solverConfig_);
+    const FESolverConfig intermediateConfig = intermediateSolverConfig(solverConfig_);
+    solver.setConfig(intermediateConfig);
 
     for (int iter = 0; iter < maxIter; iter++) {
         const auto iterStart = std::chrono::steady_clock::now();
@@ -605,6 +623,7 @@ bool TopOptSolver::runSIMP() {
     storeDensitySnapshot(densityResult_, x);
 
     // Final FEA solve for result output
+    solver.setConfig(solverConfig_);
     solver.setDensities(x, penalty, 1e-9 * mat_.E);
     solver.setLoadCase(loadCases_[0]);
     if (!solver.solve(true)) {
@@ -626,6 +645,10 @@ bool TopOptSolver::runSIMP() {
             << ", totalDensityFilterMs=" << totalDensityFilterMs
             << ", totalSensitivityFilterMs=" << totalSensitivityFilterMs
             << ", totalOcMs=" << totalOcMs
+            << ", intermediateSolverTol=" << intermediateConfig.tolerance
+            << ", intermediateSolverMaxIter=" << intermediateConfig.maxIterations
+            << ", finalSolverTol=" << solverConfig_.tolerance
+            << ", finalSolverMaxIter=" << solverConfig_.maxIterations
             << ", finalSolveAssemblyMs=" << feResult_.assemblyTimeMs
             << ", finalSolveBcMs=" << feResult_.boundaryConditionTimeMs
             << ", finalSolveMs=" << feResult_.solveTimeMs
