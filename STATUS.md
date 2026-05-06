@@ -6,18 +6,20 @@
 
 ## In Progress
 
-- Phase 0 baseline confirmation and documentation alignment
+- Phase 0 baseline inventory and issue registration
 
 ## Last Completed
 
 - Confirmed the project can already run a topology optimization sample
 - Confirmed Debug / Release builds can run successfully
 - Confirmed GPU builds can run successfully
+- Added `BASELINE_INVENTORY.md` with tutorial-readiness classification
+- Registered current placeholder/incomplete features in `KNOWN_ISSUES.md`
 
 ## Next Step
 
-- Document the confirmed baseline in `TODO.md`
-- Focus remaining Phase 0 work on feature inventory, file-flow verification, and issue tracking
+- Verify file workflow details against real usage expectations
+- Decide whether to finish Phase 0 first or begin Phase 1 tutorial entry design
 
 ## Notes
 
