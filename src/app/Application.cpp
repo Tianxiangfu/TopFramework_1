@@ -22,6 +22,7 @@
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include <filesystem>
 #include <functional>
 
 namespace TopOpt {
@@ -43,6 +44,33 @@ static void glfwDropCb(GLFWwindow* window, int pathCount, const char** paths) {
     if (g_appInstance) {
         g_appInstance->handleDroppedFiles(pathCount, paths);
     }
+}
+
+static std::string resolveProjectPath(const std::string& relativePath) {
+    namespace fs = std::filesystem;
+
+    if (relativePath.empty()) {
+        return "";
+    }
+
+    std::error_code ec;
+    fs::path current = fs::current_path(ec);
+    if (ec) {
+        return "";
+    }
+
+    for (int depth = 0; depth < 6; ++depth) {
+        fs::path candidate = current / relativePath;
+        if (fs::exists(candidate, ec)) {
+            return candidate.lexically_normal().string();
+        }
+        if (!current.has_parent_path()) {
+            break;
+        }
+        current = current.parent_path();
+    }
+
+    return "";
 }
 
 // ================================================================
@@ -172,6 +200,7 @@ bool Application::init(int width, int height) {
     executor_    = new GraphExecutor();
     executor_->setEditor(nodeEditor_);
     executor_->setView3D(view3D_);
+    buildTutorialCases();
 
     Logger::instance().info("TopOptFrame initialized");
     Logger::instance().info("Right-click canvas or use the Nodes panel to add nodes");
@@ -213,232 +242,11 @@ void Application::run() {
         ImGui::PopStyleVar(3);
 
         drawMenuBar();
-        drawToolbar();
-
-        float statusH  = 34.f;
-        float contentH = ImGui::GetContentRegionAvail().y - statusH;
-        float splitterThickness = 6.0f;
-
-        ImGui::BeginChild("ContentArea", ImVec2(0, contentH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-        {
-            float totalW    = ImGui::GetContentRegionAvail().x;
-            float contentAvH = ImGui::GetContentRegionAvail().y;
-            float usableW   = totalW - splitterThickness * 2;
-
-            // Compute panel widths from ratios
-            float leftW   = usableW * horizontalSplitRatio_;
-            float rightW  = usableW * rightPanelRatio_;
-            float centerW = usableW - leftW - rightW;
-
-            // Enforce minimums
-            if (leftW   < 200.0f) leftW   = 200.0f;
-            if (rightW  < 120.0f) rightW  = 120.0f;
-            if (centerW < 200.0f) centerW = 200.0f;
-
-            // ==========================================
-            //  LEFT PANEL
-            // ==========================================
-            ImGui::BeginChild("LeftPanel", ImVec2(leftW, 0), ImGuiChildFlags_Border);
-            {
-                drawLeftToolbar();
-                ImGui::SameLine();
-
-                ImGui::BeginChild("LeftPanelContent", ImVec2(0, 0), ImGuiChildFlags_None);
-                {
-                    float leftPanelH = ImGui::GetContentRegionAvail().y;
-                    float leftAvailW = ImGui::GetContentRegionAvail().x;
-                    float view3DH = (leftPanelH - splitterThickness) * leftVertSplitRatio_;
-
-                    ImGui::BeginChild("View3DContainer", ImVec2(0, view3DH), ImGuiChildFlags_Border);
-                    view3D_->draw();
-                    ImGui::EndChild();
-
-                    ImGui::InvisibleButton("##VSplitLeft", ImVec2(leftAvailW, splitterThickness));
-                    {
-                        bool hov = ImGui::IsItemHovered();
-                        bool act = ImGui::IsItemActive();
-                        if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                        if (act) {
-                            leftVertSplitRatio_ += ImGui::GetIO().MouseDelta.y / (leftPanelH - splitterThickness);
-                            leftVertSplitRatio_ = ImClamp(leftVertSplitRatio_, 0.15f, 0.85f);
-                        }
-                        ImDrawList* dl = ImGui::GetWindowDrawList();
-                        ImVec2 pMin = ImGui::GetItemRectMin();
-                        ImVec2 pMax = ImGui::GetItemRectMax();
-                        ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
-                        dl->AddRectFilled(pMin, pMax, col);
-                    }
-
-                    ImGui::BeginChild("ResourceBrowser", ImVec2(0, 0), ImGuiChildFlags_Border);
-                    {
-                        if (ImGui::BeginTabBar("BrowserTabs")) {
-                            if (ImGui::BeginTabItem("Browse")) {
-                                ImGui::BeginChild("BrowserScroll");
-                                modulePanel_->draw();
-                                ImGui::EndChild();
-                                ImGui::EndTabItem();
-                            }
-                            if (ImGui::BeginTabItem("Log")) {
-                                logPanel_->draw();
-                                ImGui::EndTabItem();
-                            }
-                            if (ImGui::BeginTabItem("Console")) {
-                                ImGui::TextColored(ImVec4(0.42f, 0.42f, 0.53f, 0.7f), "Console output");
-                                ImGui::EndTabItem();
-                            }
-                            ImGui::EndTabBar();
-                        }
-                    }
-                    ImGui::EndChild();
-                }
-                ImGui::EndChild();
-            }
-            ImGui::EndChild();
-
-            // ==========================================
-            //  HORIZONTAL SPLITTER
-            // ==========================================
-            ImGui::SameLine(0.0f, 0.0f);
-            ImGui::InvisibleButton("##HSplit", ImVec2(splitterThickness, contentAvH));
-            {
-                bool hov = ImGui::IsItemHovered();
-                bool act = ImGui::IsItemActive();
-                if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-                if (act && usableW > 0.0f) {
-                    horizontalSplitRatio_ += ImGui::GetIO().MouseDelta.x / usableW;
-                    horizontalSplitRatio_ = ImClamp(horizontalSplitRatio_, 0.15f, 0.80f);
-                }
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                ImVec2 pMin = ImGui::GetItemRectMin();
-                ImVec2 pMax = ImGui::GetItemRectMax();
-                ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
-                dl->AddRectFilled(pMin, pMax, col);
-            }
-
-            ImGui::SameLine(0.0f, 0.0f);
-
-            // ==========================================
-            //  CENTER PANEL
-            // ==========================================
-            ImGui::BeginChild("CenterPanel", ImVec2(centerW, 0), ImGuiChildFlags_None);
-            {
-                float centerPanelH = ImGui::GetContentRegionAvail().y;
-                float centerAvailW = ImGui::GetContentRegionAvail().x;
-                float canvasH = (centerPanelH - splitterThickness) * centerVertSplitRatio_;
-
-                ImGui::BeginChild("NodeCanvasPanel", ImVec2(0, canvasH), ImGuiChildFlags_Border);
-                {
-                    if (ImGui::SmallButton("+")) {
-                        Logger::instance().info("Add node via context menu");
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add Node (right-click canvas)");
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("-")) {
-                        // Use command for undo support
-                        int numSel = 0;
-                        if (nodeEditor_->isInitialized()) {
-                            // Will be handled by NodeEditor
-                        }
-                        nodeEditor_->removeSelectedNodes();
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove Selected (Del)");
-                    ImGui::SameLine();
-                    if (ImGui::SmallButton("X")) {
-                        auto cmd = std::make_unique<ClearAllCmd>(*nodeEditor_);
-                        cmdHistory_->execute(std::move(cmd));
-                    }
-                    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clear All Nodes");
-                    ImGui::SameLine();
-                    ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.45f, 0.5f), "Right-click to add nodes");
-                    ImGui::Separator();
-
-                    ImGui::BeginChild("NodeCanvas", ImVec2(0, 0), ImGuiChildFlags_None);
-                    nodeEditor_->draw();
-                    ImGui::EndChild();
-
-                    // Accept drag-drop from NodeListPanel
-                    if (ImGui::BeginDragDropTarget()) {
-                        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("NODE_TYPE")) {
-                            std::string typeName((const char*)payload->Data);
-                            ImVec2 dropPos = ImGui::GetMousePos();
-                            nodeEditor_->addNode(typeName, dropPos.x, dropPos.y);
-                        }
-                        ImGui::EndDragDropTarget();
-                    }
-                }
-                ImGui::EndChild();
-
-                ImGui::InvisibleButton("##VSplitCenter", ImVec2(centerAvailW, splitterThickness));
-                {
-                    bool hov = ImGui::IsItemHovered();
-                    bool act = ImGui::IsItemActive();
-                    if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
-                    if (act) {
-                        centerVertSplitRatio_ += ImGui::GetIO().MouseDelta.y / (centerPanelH - splitterThickness);
-                        centerVertSplitRatio_ = ImClamp(centerVertSplitRatio_, 0.15f, 0.85f);
-                    }
-                    ImDrawList* dl = ImGui::GetWindowDrawList();
-                    ImVec2 pMin = ImGui::GetItemRectMin();
-                    ImVec2 pMax = ImGui::GetItemRectMax();
-                    ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
-                    dl->AddRectFilled(pMin, pMax, col);
-                }
-
-                ImGui::BeginChild("PropertyPanel", ImVec2(0, 0), ImGuiChildFlags_Border);
-                {
-                    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Properties");
-                    ImGui::Separator();
-                    ImGui::BeginChild("PropertyContent", ImVec2(0, 0), ImGuiChildFlags_None);
-                    propPanel_->draw(*nodeEditor_);
-                    drawDensityPlaybackControls();
-                    updateDensityPlayback();
-                    ImGui::EndChild();
-                }
-                ImGui::EndChild();
-
-                // Live preview: update 3D view when selection or params change
-                updateLivePreview();
-            }
-            ImGui::EndChild();
-
-            // ==========================================
-            //  RIGHT SPLITTER
-            // ==========================================
-            ImGui::SameLine(0.0f, 0.0f);
-            ImGui::InvisibleButton("##HSplitRight", ImVec2(splitterThickness, contentAvH));
-            {
-                bool hov = ImGui::IsItemHovered();
-                bool act = ImGui::IsItemActive();
-                if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
-                if (act && usableW > 0.0f) {
-                    rightPanelRatio_ -= ImGui::GetIO().MouseDelta.x / usableW;
-                    rightPanelRatio_ = ImClamp(rightPanelRatio_, 0.08f, 0.40f);
-                }
-                ImDrawList* dl = ImGui::GetWindowDrawList();
-                ImVec2 pMin = ImGui::GetItemRectMin();
-                ImVec2 pMax = ImGui::GetItemRectMax();
-                ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
-                dl->AddRectFilled(pMin, pMax, col);
-            }
-
-            ImGui::SameLine(0.0f, 0.0f);
-
-            // ==========================================
-            //  RIGHT SIDEBAR
-            // ==========================================
-            ImGui::BeginChild("NodeLibrary", ImVec2(rightW, 0), ImGuiChildFlags_Border);
-            {
-                ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Node Library");
-                ImGui::Separator();
-                ImGui::BeginChild("NodeLibContent", ImVec2(0, 0), ImGuiChildFlags_None);
-                nodeList_->draw(*nodeEditor_);
-                ImGui::EndChild();
-            }
-            ImGui::EndChild();
+        if (activeScreen_ == AppScreen::Workspace) {
+            drawWorkspace();
+        } else {
+            drawTutorialHome();
         }
-        ImGui::EndChild();
-
-        drawStatusBar();
 
         ImGui::End(); // MainHost
 
@@ -451,6 +259,406 @@ void Application::run() {
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         glfwSwapBuffers(window_);
     }
+}
+
+void Application::buildTutorialCases() {
+    tutorialCases_.clear();
+    tutorialCases_.push_back({
+        "Cantilever Beam",
+        "Run a complete GPU-ready topology optimization case.",
+        "Intro",
+        "examples/cantilever_gpu_test.topopt",
+        "Understand the standard domain-material-load-SIMP-density workflow.",
+        "Watch the density evolution, volume fraction, and the final load path.",
+        !resolveProjectPath("examples/cantilever_gpu_test.topopt").empty()
+    });
+    tutorialCases_.push_back({
+        "MBB Beam",
+        "Symmetry-driven benchmark case for later lessons.",
+        "Intermediate",
+        "",
+        "Compare support conditions and symmetry effects in a canonical benchmark.",
+        "Focus on symmetry, support placement, and topology branching.",
+        false
+    });
+    tutorialCases_.push_back({
+        "Intro FEA",
+        "Displacement-only lesson before optimization.",
+        "Intro",
+        "",
+        "Learn how supports, forces, and material settings affect the displacement field.",
+        "Observe the deformed shape and connect loading choices to response patterns.",
+        false
+    });
+}
+
+bool Application::loadProjectFromPath(const std::string& path) {
+    if (path.empty()) {
+        return false;
+    }
+
+    ViewState view;
+    if (!ProjectSerializer::loadFromFile(path, *nodeEditor_, view)) {
+        Logger::instance().error("Failed to load project: " + path);
+        return false;
+    }
+
+    horizontalSplitRatio_ = view.horizontalSplitRatio;
+    leftVertSplitRatio_   = view.leftVertSplitRatio;
+    centerVertSplitRatio_ = view.centerVertSplitRatio;
+    rightPanelRatio_      = view.rightPanelRatio;
+    view3D_->setCameraState(view.camDistance, view.camYaw, view.camPitch,
+                            view.camCenter[0], view.camCenter[1], view.camCenter[2]);
+    currentFilePath_ = path;
+    activeScreen_ = AppScreen::Workspace;
+    cmdHistory_->clear();
+    cmdHistory_->markClean();
+    prevSelectedNodeId_ = -1;
+    prevParamHash_ = 0;
+    densityPlayback_ = {};
+    updateWindowTitle();
+    return true;
+}
+
+bool Application::openTutorialCase(int caseIndex) {
+    if (caseIndex < 0 || caseIndex >= static_cast<int>(tutorialCases_.size())) {
+        return false;
+    }
+
+    const TutorialCase& tutorialCase = tutorialCases_[caseIndex];
+    const std::string resolved = resolveProjectPath(tutorialCase.relativeProjectPath);
+    if (resolved.empty()) {
+        Logger::instance().warn("Tutorial case is not available yet: " + tutorialCase.title);
+        return false;
+    }
+
+    if (!loadProjectFromPath(resolved)) {
+        return false;
+    }
+
+    activeTutorialCaseIndex_ = caseIndex;
+    Logger::instance().info("Opened tutorial case: " + tutorialCase.title);
+    return true;
+}
+
+void Application::drawTutorialHome() {
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(24, 20));
+    ImGui::BeginChild("TutorialHome", ImVec2(0, 0), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetWindowPos();
+    ImVec2 size = ImGui::GetWindowSize();
+    dl->AddRectFilledMultiColor(
+        pos,
+        ImVec2(pos.x + size.x, pos.y + size.y),
+        IM_COL32(24, 28, 34, 255),
+        IM_COL32(28, 38, 54, 255),
+        IM_COL32(16, 18, 22, 255),
+        IM_COL32(20, 24, 32, 255));
+
+    ImGui::TextColored(ImVec4(0.55f, 0.78f, 0.98f, 1.0f), "Topology Optimization Course Studio");
+    ImGui::SetWindowFontScale(1.35f);
+    ImGui::TextUnformatted("Start with a guided lesson or open the full workspace.");
+    ImGui::SetWindowFontScale(1.0f);
+    ImGui::Spacing();
+    ImGui::TextColored(
+        ImVec4(0.72f, 0.75f, 0.82f, 1.0f),
+        "This build already runs topology optimization examples. Phase 1 now focuses on teaching-friendly entry flow.");
+    ImGui::Spacing();
+
+    if (ImGui::Button("Open Existing Project", ImVec2(220, 0))) {
+        activeTutorialCaseIndex_ = -1;
+        openProject();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open any .topopt project from disk");
+    ImGui::SameLine();
+    if (ImGui::Button("Enter Blank Workspace", ImVec2(220, 0))) {
+        newProject();
+    }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Skip the lesson flow and edit the graph directly");
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Guided Lessons");
+
+    const float gap = 14.0f;
+    const float availW = ImGui::GetContentRegionAvail().x;
+    const float cardW = (availW - gap * 2.0f) / 3.0f;
+    const float cardH = 280.0f;
+
+    for (int i = 0; i < static_cast<int>(tutorialCases_.size()); ++i) {
+        if (i > 0) {
+            ImGui::SameLine(0.0f, gap);
+        }
+
+        const TutorialCase& tutorialCase = tutorialCases_[i];
+        ImGui::BeginChild(i + 1000, ImVec2(cardW, cardH), ImGuiChildFlags_Border);
+        ImGui::TextColored(ImVec4(0.52f, 0.70f, 0.94f, 1.0f), "%s", tutorialCase.difficulty.c_str());
+        ImGui::Spacing();
+        ImGui::TextWrapped("%s", tutorialCase.title.c_str());
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.67f, 0.70f, 0.76f, 1.0f), "%s", tutorialCase.subtitle.c_str());
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), "Goal");
+        ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
+        ImGui::Spacing();
+        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), "Observe");
+        ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
+        ImGui::Dummy(ImVec2(0, 8));
+
+        if (!tutorialCase.available) {
+            ImGui::BeginDisabled();
+        }
+        if (ImGui::Button(tutorialCase.available ? "Start Lesson" : "Preparing", ImVec2(-1, 0))) {
+            openTutorialCase(i);
+        }
+        if (!tutorialCase.available) {
+            ImGui::EndDisabled();
+        }
+        ImGui::EndChild();
+    }
+
+    ImGui::Spacing();
+    ImGui::SeparatorText("Current Phase 1 Definition");
+    ImGui::TextWrapped(
+        "This screen is the first tutorial-oriented layer: home entry, case selection, and lesson context. "
+        "Workflow guidance and parameter explanations will follow in later phases.");
+
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+}
+
+void Application::drawWorkspace() {
+    drawToolbar();
+
+    float statusH  = 34.f;
+    float contentH = ImGui::GetContentRegionAvail().y - statusH;
+    float splitterThickness = 6.0f;
+
+    ImGui::BeginChild("ContentArea", ImVec2(0, contentH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    {
+        float totalW = ImGui::GetContentRegionAvail().x;
+        float contentAvH = ImGui::GetContentRegionAvail().y;
+        float usableW = totalW - splitterThickness * 2;
+
+        float leftW   = usableW * horizontalSplitRatio_;
+        float rightW  = usableW * rightPanelRatio_;
+        float centerW = usableW - leftW - rightW;
+
+        if (leftW   < 200.0f) leftW   = 200.0f;
+        if (rightW  < 120.0f) rightW  = 120.0f;
+        if (centerW < 200.0f) centerW = 200.0f;
+
+        ImGui::BeginChild("LeftPanel", ImVec2(leftW, 0), ImGuiChildFlags_Border);
+        {
+            drawLeftToolbar();
+            ImGui::SameLine();
+
+            ImGui::BeginChild("LeftPanelContent", ImVec2(0, 0), ImGuiChildFlags_None);
+            {
+                float leftPanelH = ImGui::GetContentRegionAvail().y;
+                float leftAvailW = ImGui::GetContentRegionAvail().x;
+                float view3DH = (leftPanelH - splitterThickness) * leftVertSplitRatio_;
+
+                ImGui::BeginChild("View3DContainer", ImVec2(0, view3DH), ImGuiChildFlags_Border);
+                view3D_->draw();
+                ImGui::EndChild();
+
+                ImGui::InvisibleButton("##VSplitLeft", ImVec2(leftAvailW, splitterThickness));
+                {
+                    bool hov = ImGui::IsItemHovered();
+                    bool act = ImGui::IsItemActive();
+                    if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                    if (act) {
+                        leftVertSplitRatio_ += ImGui::GetIO().MouseDelta.y / (leftPanelH - splitterThickness);
+                        leftVertSplitRatio_ = ImClamp(leftVertSplitRatio_, 0.15f, 0.85f);
+                    }
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    ImVec2 pMin = ImGui::GetItemRectMin();
+                    ImVec2 pMax = ImGui::GetItemRectMax();
+                    ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
+                    dl->AddRectFilled(pMin, pMax, col);
+                }
+
+                ImGui::BeginChild("ResourceBrowser", ImVec2(0, 0), ImGuiChildFlags_Border);
+                {
+                    if (ImGui::BeginTabBar("BrowserTabs")) {
+                        if (activeTutorialCaseIndex_ >= 0 && ImGui::BeginTabItem("Lesson")) {
+                            drawLessonTab();
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem("Browse")) {
+                            ImGui::BeginChild("BrowserScroll");
+                            modulePanel_->draw();
+                            ImGui::EndChild();
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem("Log")) {
+                            logPanel_->draw();
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem("Console")) {
+                            ImGui::TextColored(ImVec4(0.42f, 0.42f, 0.53f, 0.7f), "Console output");
+                            ImGui::EndTabItem();
+                        }
+                        ImGui::EndTabBar();
+                    }
+                }
+                ImGui::EndChild();
+            }
+            ImGui::EndChild();
+        }
+        ImGui::EndChild();
+
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::InvisibleButton("##HSplit", ImVec2(splitterThickness, contentAvH));
+        {
+            bool hov = ImGui::IsItemHovered();
+            bool act = ImGui::IsItemActive();
+            if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+            if (act && usableW > 0.0f) {
+                horizontalSplitRatio_ += ImGui::GetIO().MouseDelta.x / usableW;
+                horizontalSplitRatio_ = ImClamp(horizontalSplitRatio_, 0.15f, 0.80f);
+            }
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 pMin = ImGui::GetItemRectMin();
+            ImVec2 pMax = ImGui::GetItemRectMax();
+            ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
+            dl->AddRectFilled(pMin, pMax, col);
+        }
+
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::BeginChild("CenterPanel", ImVec2(centerW, 0), ImGuiChildFlags_None);
+        {
+            float centerPanelH = ImGui::GetContentRegionAvail().y;
+            float centerAvailW = ImGui::GetContentRegionAvail().x;
+            float canvasH = (centerPanelH - splitterThickness) * centerVertSplitRatio_;
+
+            ImGui::BeginChild("NodeCanvasPanel", ImVec2(0, canvasH), ImGuiChildFlags_Border);
+            {
+                if (ImGui::SmallButton("+")) {
+                    Logger::instance().info("Add node via context menu");
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Add Node (right-click canvas)");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("-")) {
+                    nodeEditor_->removeSelectedNodes();
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Remove Selected (Del)");
+                ImGui::SameLine();
+                if (ImGui::SmallButton("X")) {
+                    auto cmd = std::make_unique<ClearAllCmd>(*nodeEditor_);
+                    cmdHistory_->execute(std::move(cmd));
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Clear All Nodes");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.40f, 0.40f, 0.45f, 0.5f), "Right-click to add nodes");
+                ImGui::Separator();
+
+                ImGui::BeginChild("NodeCanvas", ImVec2(0, 0), ImGuiChildFlags_None);
+                nodeEditor_->draw();
+                ImGui::EndChild();
+
+                if (ImGui::BeginDragDropTarget()) {
+                    if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("NODE_TYPE")) {
+                        std::string typeName((const char*)payload->Data);
+                        ImVec2 dropPos = ImGui::GetMousePos();
+                        nodeEditor_->addNode(typeName, dropPos.x, dropPos.y);
+                    }
+                    ImGui::EndDragDropTarget();
+                }
+            }
+            ImGui::EndChild();
+
+            ImGui::InvisibleButton("##VSplitCenter", ImVec2(centerAvailW, splitterThickness));
+            {
+                bool hov = ImGui::IsItemHovered();
+                bool act = ImGui::IsItemActive();
+                if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNS);
+                if (act) {
+                    centerVertSplitRatio_ += ImGui::GetIO().MouseDelta.y / (centerPanelH - splitterThickness);
+                    centerVertSplitRatio_ = ImClamp(centerVertSplitRatio_, 0.15f, 0.85f);
+                }
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                ImVec2 pMin = ImGui::GetItemRectMin();
+                ImVec2 pMax = ImGui::GetItemRectMax();
+                ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
+                dl->AddRectFilled(pMin, pMax, col);
+            }
+
+            ImGui::BeginChild("PropertyPanel", ImVec2(0, 0), ImGuiChildFlags_Border);
+            {
+                ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Properties");
+                ImGui::Separator();
+                ImGui::BeginChild("PropertyContent", ImVec2(0, 0), ImGuiChildFlags_None);
+                propPanel_->draw(*nodeEditor_);
+                drawDensityPlaybackControls();
+                updateDensityPlayback();
+                ImGui::EndChild();
+            }
+            ImGui::EndChild();
+
+            updateLivePreview();
+        }
+        ImGui::EndChild();
+
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::InvisibleButton("##HSplitRight", ImVec2(splitterThickness, contentAvH));
+        {
+            bool hov = ImGui::IsItemHovered();
+            bool act = ImGui::IsItemActive();
+            if (hov || act) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeEW);
+            if (act && usableW > 0.0f) {
+                rightPanelRatio_ -= ImGui::GetIO().MouseDelta.x / usableW;
+                rightPanelRatio_ = ImClamp(rightPanelRatio_, 0.08f, 0.40f);
+            }
+            ImDrawList* dl = ImGui::GetWindowDrawList();
+            ImVec2 pMin = ImGui::GetItemRectMin();
+            ImVec2 pMax = ImGui::GetItemRectMax();
+            ImU32 col = (hov || act) ? IM_COL32(102, 153, 230, 255) : IM_COL32(46, 49, 56, 255);
+            dl->AddRectFilled(pMin, pMax, col);
+        }
+
+        ImGui::SameLine(0.0f, 0.0f);
+        ImGui::BeginChild("NodeLibrary", ImVec2(rightW, 0), ImGuiChildFlags_Border);
+        {
+            ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Node Library");
+            ImGui::Separator();
+            ImGui::BeginChild("NodeLibContent", ImVec2(0, 0), ImGuiChildFlags_None);
+            nodeList_->draw(*nodeEditor_);
+            ImGui::EndChild();
+        }
+        ImGui::EndChild();
+    }
+    ImGui::EndChild();
+
+    drawStatusBar();
+}
+
+void Application::drawLessonTab() const {
+    if (activeTutorialCaseIndex_ < 0 || activeTutorialCaseIndex_ >= static_cast<int>(tutorialCases_.size())) {
+        ImGui::TextDisabled("Open a guided lesson to view course notes.");
+        return;
+    }
+
+    const TutorialCase& tutorialCase = tutorialCases_[activeTutorialCaseIndex_];
+    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "%s", tutorialCase.title.c_str());
+    ImGui::SameLine();
+    ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.54f, 1.0f), "[%s]", tutorialCase.difficulty.c_str());
+    ImGui::Spacing();
+    ImGui::TextWrapped("%s", tutorialCase.subtitle.c_str());
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), "Learning Goal");
+    ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
+    ImGui::Spacing();
+    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), "What To Observe");
+    ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
+    ImGui::Spacing();
+    ImGui::Separator();
+    ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.78f, 1.0f), "Suggested student flow");
+    ImGui::BulletText("Inspect the domain and supports first.");
+    ImGui::BulletText("Run the graph and watch the density playback.");
+    ImGui::BulletText("Compare volume fraction, objective, and final topology shape.");
 }
 
 void Application::shutdown() {
@@ -480,7 +688,13 @@ void Application::shutdown() {
 void Application::newProject() {
     auto cmd = std::make_unique<ClearAllCmd>(*nodeEditor_);
     cmdHistory_->execute(std::move(cmd));
+    activeScreen_ = AppScreen::Workspace;
+    activeTutorialCaseIndex_ = -1;
     currentFilePath_.clear();
+    prevSelectedNodeId_ = -1;
+    prevParamHash_ = 0;
+    densityPlayback_ = {};
+    if (view3D_) view3D_->clearModel();
     cmdHistory_->markClean();
     updateWindowTitle();
     Logger::instance().info("New project created");
@@ -490,19 +704,8 @@ void Application::openProject() {
     std::string path = FileDialog::openFile(window_);
     if (path.empty()) return;
 
-    ViewState view;
-    if (ProjectSerializer::loadFromFile(path, *nodeEditor_, view)) {
-        horizontalSplitRatio_ = view.horizontalSplitRatio;
-        leftVertSplitRatio_   = view.leftVertSplitRatio;
-        centerVertSplitRatio_ = view.centerVertSplitRatio;
-        rightPanelRatio_      = view.rightPanelRatio;
-        view3D_->setCameraState(view.camDistance, view.camYaw, view.camPitch,
-                                view.camCenter[0], view.camCenter[1], view.camCenter[2]);
-        currentFilePath_ = path;
-        cmdHistory_->clear();
-        cmdHistory_->markClean();
-        updateWindowTitle();
-    }
+    activeTutorialCaseIndex_ = -1;
+    loadProjectFromPath(path);
 }
 
 void Application::saveProject() {
@@ -624,7 +827,18 @@ void Application::drawMenuBar() {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("Edit")) {
+        if (ImGui::BeginMenu("Course")) {
+            if (ImGui::MenuItem("Tutorial Home")) {
+                activeScreen_ = AppScreen::TutorialHome;
+            }
+            if (activeTutorialCaseIndex_ >= 0 &&
+                ImGui::MenuItem("Reload Active Lesson")) {
+                openTutorialCase(activeTutorialCaseIndex_);
+            }
+            ImGui::EndMenu();
+        }
+
+        if (activeScreen_ == AppScreen::Workspace && ImGui::BeginMenu("Edit")) {
             if (ImGui::MenuItem("Undo", "Ctrl+Z", false, cmdHistory_->canUndo())) {
                 cmdHistory_->undo();
                 updateWindowTitle();
@@ -645,7 +859,7 @@ void Application::drawMenuBar() {
             ImGui::EndMenu();
         }
 
-        if (ImGui::BeginMenu("View")) {
+        if (activeScreen_ == AppScreen::Workspace && ImGui::BeginMenu("View")) {
             ImGui::SeparatorText("Panel Layout");
             float leftPct2 = horizontalSplitRatio_ * 100.0f;
             if (ImGui::SliderFloat("Left Panel", &leftPct2, 15.0f, 80.0f, "%.0f%%")) {
@@ -696,6 +910,9 @@ void Application::drawToolbar() {
     ImGui::BeginChild("Toolbar", ImVec2(0, toolbarH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
 
     // --- File group ---
+    if (ImGui::Button("Home")) { activeScreen_ = AppScreen::TutorialHome; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Return to the lesson home screen");
+    ImGui::SameLine();
     if (ImGui::Button("New")) { newProject(); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("New Project (Ctrl+N)");
     ImGui::SameLine();

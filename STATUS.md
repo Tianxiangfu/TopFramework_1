@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-- Active phase: `Phase 0 - Stabilize Current Baseline`
+- Active phase: `Phase 1 - Make It Usable As A Tutorial App`
 
 ## In Progress
 
-- Phase 0 baseline inventory and issue registration
+- Tutorial home, lesson entry, and case-selection first pass
 
 ## Last Completed
 
@@ -15,11 +15,15 @@
 - Confirmed GPU builds can run successfully
 - Added `BASELINE_INVENTORY.md` with tutorial-readiness classification
 - Registered current placeholder/incomplete features in `KNOWN_ISSUES.md`
+- Implemented a tutorial home screen and lesson-aware workspace entry
+- Added lesson metadata and integrated one-click loading for the existing cantilever example
+- Added a `Lesson` tab inside the workspace for course context
+- Verified the project still builds with `cmake --build --preset debug`
 
 ## Next Step
 
-- Verify file workflow details against real usage expectations
-- Decide whether to finish Phase 0 first or begin Phase 1 tutorial entry design
+- Manually validate the tutorial home flow in the running application
+- Decide whether to activate more example cases now or build the lesson-content panel further first
 
 ## Notes
 

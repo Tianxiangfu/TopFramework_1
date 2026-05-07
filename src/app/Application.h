@@ -1,5 +1,6 @@
 #pragma once
 #include <string>
+#include <vector>
 
 struct GLFWwindow;
 
@@ -18,6 +19,7 @@ struct ParamDef;
 
 // Active tool for left toolbar
 enum class Tool { Select, Zoom, Rotate, Camera };
+enum class AppScreen { TutorialHome, Workspace };
 
 class Application {
 public:
@@ -32,15 +34,31 @@ public:
     void handleDroppedFiles(int pathCount, const char** paths);
 
 private:
+    struct TutorialCase {
+        std::string title;
+        std::string subtitle;
+        std::string difficulty;
+        std::string relativeProjectPath;
+        std::string objective;
+        std::string observation;
+        bool available = false;
+    };
+
     void drawMenuBar();
     void drawToolbar();
     void drawStatusBar();
     void drawLeftToolbar();
+    void drawTutorialHome();
+    void drawWorkspace();
+    void drawLessonTab() const;
     void handleKeyboardShortcuts();
     void drawDensityPlaybackControls();
     void updateDensityPlayback();
     ParamDef* findNodeParam(NodeInstance& node, const std::string& name) const;
     const ParamDef* findNodeParam(const NodeInstance& node, const std::string& name) const;
+    void buildTutorialCases();
+    bool loadProjectFromPath(const std::string& path);
+    bool openTutorialCase(int caseIndex);
 
     // File operations
     void newProject();
@@ -61,9 +79,12 @@ private:
 
     bool running_     = false;
     bool isExecuting_ = false;
+    AppScreen activeScreen_ = AppScreen::TutorialHome;
 
     // File state
     std::string currentFilePath_;
+    std::vector<TutorialCase> tutorialCases_;
+    int activeTutorialCaseIndex_ = -1;
 
     // Tool state
     Tool activeTool_ = Tool::Select;
