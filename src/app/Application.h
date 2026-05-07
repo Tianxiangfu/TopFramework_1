@@ -3,6 +3,7 @@
 #include <vector>
 
 struct GLFWwindow;
+struct ImFont;
 
 namespace TopOpt {
 
@@ -57,6 +58,7 @@ private:
     ParamDef* findNodeParam(NodeInstance& node, const std::string& name) const;
     const ParamDef* findNodeParam(const NodeInstance& node, const std::string& name) const;
     void buildTutorialCases();
+    void loadFonts();
     bool loadProjectFromPath(const std::string& path);
     bool openTutorialCase(int caseIndex);
 
@@ -76,6 +78,9 @@ private:
     View3DPanel*    view3D_       = nullptr;
     CommandHistory* cmdHistory_   = nullptr;
     GraphExecutor*  executor_     = nullptr;
+    ImFont* titleFont_            = nullptr;
+    ImFont* bodyFont_             = nullptr;
+    ImFont* smallFont_            = nullptr;
 
     bool running_     = false;
     bool isExecuting_ = false;

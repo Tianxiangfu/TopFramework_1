@@ -22,10 +22,44 @@
 #include <cstdio>
 #include <cstring>
 #include <algorithm>
+#include <array>
+#include <cstdlib>
 #include <filesystem>
 #include <functional>
 
 namespace TopOpt {
+
+namespace {
+
+struct ScopedFont {
+    explicit ScopedFont(ImFont* font) : active_(font != nullptr) {
+        if (active_) {
+            ImGui::PushFont(font);
+        }
+    }
+
+    ~ScopedFont() {
+        if (active_) {
+            ImGui::PopFont();
+        }
+    }
+
+private:
+    bool active_ = false;
+};
+
+bool fileExists(const std::string& path) {
+    std::error_code ec;
+    return std::filesystem::exists(path, ec);
+}
+
+std::string windowsFontPath(const char* fileName) {
+    const char* windir = std::getenv("WINDIR");
+    const std::string baseDir = (windir && *windir) ? windir : "C:\\Windows";
+    return baseDir + "\\Fonts\\" + fileName;
+}
+
+} // namespace
 
 // Global app pointer for GLFW callbacks (single instance expected)
 static Application* g_appInstance = nullptr;
@@ -112,9 +146,7 @@ bool Application::init(int width, int height) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.IniFilename = "imgui_layout.ini";
 
-    // Load fonts - large size for readability
-    io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\msyh.ttc", 26.0f, nullptr, io.Fonts->GetGlyphRangesChineseFull());
-    io.FontDefault = io.Fonts->Fonts.back();
+    loadFonts();
 
     // Polished dark theme
     ImGui::StyleColorsDark();
@@ -208,6 +240,48 @@ bool Application::init(int width, int height) {
     running_ = true;
     updateWindowTitle();
     return true;
+}
+
+void Application::loadFonts() {
+    ImGuiIO& io = ImGui::GetIO();
+    const ImWchar* glyphRanges = io.Fonts->GetGlyphRangesChineseFull();
+    const std::array<std::string, 4> fontCandidates = {
+        windowsFontPath("msyh.ttc"),
+        windowsFontPath("msyhbd.ttc"),
+        windowsFontPath("simhei.ttf"),
+        windowsFontPath("simsun.ttc")
+    };
+
+    io.Fonts->Clear();
+    titleFont_ = nullptr;
+    bodyFont_ = nullptr;
+    smallFont_ = nullptr;
+
+    for (const std::string& fontPath : fontCandidates) {
+        if (!fileExists(fontPath)) {
+            continue;
+        }
+
+        bodyFont_ = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 20.0f, nullptr, glyphRanges);
+        titleFont_ = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 28.0f, nullptr, glyphRanges);
+        smallFont_ = io.Fonts->AddFontFromFileTTF(fontPath.c_str(), 16.0f, nullptr, glyphRanges);
+        if (bodyFont_ && titleFont_ && smallFont_) {
+            io.FontDefault = bodyFont_;
+            Logger::instance().info("Loaded UI fonts: " + fontPath);
+            return;
+        }
+
+        io.Fonts->Clear();
+        titleFont_ = nullptr;
+        bodyFont_ = nullptr;
+        smallFont_ = nullptr;
+    }
+
+    bodyFont_ = io.Fonts->AddFontDefault();
+    titleFont_ = bodyFont_;
+    smallFont_ = bodyFont_;
+    io.FontDefault = bodyFont_;
+    Logger::instance().warn("Falling back to the built-in ImGui font; Chinese glyph coverage may be incomplete");
 }
 
 void Application::run() {
@@ -356,14 +430,18 @@ void Application::drawTutorialHome() {
         IM_COL32(16, 18, 22, 255),
         IM_COL32(20, 24, 32, 255));
 
-    ImGui::TextColored(ImVec4(0.55f, 0.78f, 0.98f, 1.0f), u8"\u62d3\u6251\u4f18\u5316\u8bfe\u7a0b\u5de5\u4f5c\u53f0");
-    ImGui::SetWindowFontScale(1.35f);
+    {
+        ScopedFont titleFont(titleFont_);
+        ImGui::TextColored(ImVec4(0.55f, 0.78f, 0.98f, 1.0f), u8"\u62d3\u6251\u4f18\u5316\u8bfe\u7a0b\u5de5\u4f5c\u53f0");
+    }
     ImGui::TextUnformatted(u8"\u4f60\u53ef\u4ee5\u5148\u4ece\u6559\u5b66\u6848\u4f8b\u5f00\u59cb\uff0c\u4e5f\u53ef\u4ee5\u76f4\u63a5\u8fdb\u5165\u5b8c\u6574\u5de5\u4f5c\u533a\u3002");
-    ImGui::SetWindowFontScale(1.0f);
     ImGui::Spacing();
-    ImGui::TextColored(
-        ImVec4(0.72f, 0.75f, 0.82f, 1.0f),
-        u8"\u5f53\u524d\u7248\u672c\u5df2\u7ecf\u53ef\u4ee5\u8fd0\u884c\u62d3\u6251\u4f18\u5316\u6848\u4f8b\u3002Phase 1 \u7684\u91cd\u70b9\u662f\u628a\u5165\u53e3\u6539\u9020\u6210\u9002\u5408\u6559\u5b66\u7684\u5f62\u5f0f\u3002");
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(
+            ImVec4(0.72f, 0.75f, 0.82f, 1.0f),
+            u8"\u5f53\u524d\u7248\u672c\u5df2\u7ecf\u53ef\u4ee5\u8fd0\u884c\u62d3\u6251\u4f18\u5316\u6848\u4f8b\u3002Phase 1 \u7684\u91cd\u70b9\u662f\u628a\u5165\u53e3\u6539\u9020\u6210\u9002\u5408\u6559\u5b66\u7684\u5f62\u5f0f\u3002");
+    }
     ImGui::Spacing();
 
     if (ImGui::Button(u8"\u6253\u5f00\u5df2\u6709\u5de5\u7a0b", ImVec2(220, 0))) {
@@ -392,17 +470,32 @@ void Application::drawTutorialHome() {
 
         const TutorialCase& tutorialCase = tutorialCases_[i];
         ImGui::BeginChild(i + 1000, ImVec2(cardW, cardH), ImGuiChildFlags_Border);
-        ImGui::TextColored(ImVec4(0.52f, 0.70f, 0.94f, 1.0f), "%s", tutorialCase.difficulty.c_str());
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextColored(ImVec4(0.52f, 0.70f, 0.94f, 1.0f), "%s", tutorialCase.difficulty.c_str());
+        }
         ImGui::Spacing();
-        ImGui::TextWrapped("%s", tutorialCase.title.c_str());
+        {
+            ScopedFont titleFont(titleFont_);
+            ImGui::TextWrapped("%s", tutorialCase.title.c_str());
+        }
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.67f, 0.70f, 0.76f, 1.0f), "%s", tutorialCase.subtitle.c_str());
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextColored(ImVec4(0.67f, 0.70f, 0.76f, 1.0f), "%s", tutorialCase.subtitle.c_str());
+        }
         ImGui::Spacing();
         ImGui::Separator();
-        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
+        }
         ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
+        }
         ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
         ImGui::Dummy(ImVec2(0, 8));
 
@@ -420,9 +513,12 @@ void Application::drawTutorialHome() {
 
     ImGui::Spacing();
     ImGui::SeparatorText(u8"\u5f53\u524d\u9636\u6bb5\u8bf4\u660e");
-    ImGui::TextWrapped(
-        "%s",
-        u8"\u8fd9\u4e2a\u9996\u9875\u662f\u6559\u7a0b\u5316\u6539\u9020\u7684\u7b2c\u4e00\u5c42\uff1a\u8bfe\u7a0b\u5165\u53e3\u3001\u6848\u4f8b\u9009\u62e9\u548c\u8bfe\u7a0b\u8bf4\u660e\u4e0a\u4e0b\u6587\u3002\u540e\u7eed\u9636\u6bb5\u4f1a\u7ee7\u7eed\u8865\u5145\u6d41\u7a0b\u5f15\u5bfc\u548c\u53c2\u6570\u89e3\u91ca\u3002");
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextWrapped(
+            "%s",
+            u8"\u8fd9\u4e2a\u9996\u9875\u662f\u6559\u7a0b\u5316\u6539\u9020\u7684\u7b2c\u4e00\u5c42\uff1a\u8bfe\u7a0b\u5165\u53e3\u3001\u6848\u4f8b\u9009\u62e9\u548c\u8bfe\u7a0b\u8bf4\u660e\u4e0a\u4e0b\u6587\u3002\u540e\u7eed\u9636\u6bb5\u4f1a\u7ee7\u7eed\u8865\u5145\u6d41\u7a0b\u5f15\u5bfc\u548c\u53c2\u6570\u89e3\u91ca\u3002");
+    }
 
     ImGui::EndChild();
     ImGui::PopStyleVar();
@@ -588,7 +684,10 @@ void Application::drawWorkspace() {
 
             ImGui::BeginChild("PropertyPanel", ImVec2(0, 0), ImGuiChildFlags_Border);
             {
-                ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Properties");
+                {
+                    ScopedFont titleFont(titleFont_);
+                    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Properties");
+                }
                 ImGui::Separator();
                 ImGui::BeginChild("PropertyContent", ImVec2(0, 0), ImGuiChildFlags_None);
                 propPanel_->draw(*nodeEditor_);
@@ -622,7 +721,10 @@ void Application::drawWorkspace() {
         ImGui::SameLine(0.0f, 0.0f);
         ImGui::BeginChild("NodeLibrary", ImVec2(rightW, 0), ImGuiChildFlags_Border);
         {
-            ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Node Library");
+            {
+                ScopedFont titleFont(titleFont_);
+                ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "Node Library");
+            }
             ImGui::Separator();
             ImGui::BeginChild("NodeLibContent", ImVec2(0, 0), ImGuiChildFlags_None);
             nodeList_->draw(*nodeEditor_);
@@ -642,20 +744,35 @@ void Application::drawLessonTab() const {
     }
 
     const TutorialCase& tutorialCase = tutorialCases_[activeTutorialCaseIndex_];
-    ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "%s", tutorialCase.title.c_str());
+    {
+        ScopedFont titleFont(titleFont_);
+        ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), "%s", tutorialCase.title.c_str());
+    }
     ImGui::SameLine();
-    ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.54f, 1.0f), "[%s]", tutorialCase.difficulty.c_str());
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(ImVec4(0.45f, 0.48f, 0.54f, 1.0f), "[%s]", tutorialCase.difficulty.c_str());
+    }
     ImGui::Spacing();
     ImGui::TextWrapped("%s", tutorialCase.subtitle.c_str());
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
+    }
     ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
+    }
     ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.78f, 1.0f), u8"\u5efa\u8bae\u5b66\u4e60\u6b65\u9aa4");
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.78f, 1.0f), u8"\u5efa\u8bae\u5b66\u4e60\u6b65\u9aa4");
+    }
     ImGui::BulletText("%s", u8"\u5148\u89c2\u5bdf\u8bbe\u8ba1\u57df\u3001\u652f\u6491\u548c\u8f7d\u8377\u8bbe\u7f6e\u3002");
     ImGui::BulletText("%s", u8"\u8fd0\u884c\u8282\u70b9\u56fe\uff0c\u67e5\u770b\u5bc6\u5ea6\u52a8\u753b\u64ad\u653e\u8fc7\u7a0b\u3002");
     ImGui::BulletText("%s", u8"\u6bd4\u8f83\u4f53\u79ef\u5206\u6570\u3001\u76ee\u6807\u51fd\u6570\u548c\u6700\u7ec8\u62d3\u6251\u5f62\u6001\u3002");
@@ -799,9 +916,12 @@ void Application::handleKeyboardShortcuts() {
 void Application::drawMenuBar() {
     if (ImGui::BeginMenuBar()) {
         // Brand logo with accent color
-        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.65f, 0.95f, 1.0f));
-        ImGui::TextUnformatted("TopOpt");
-        ImGui::PopStyleColor();
+        {
+            ScopedFont titleFont(titleFont_);
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.45f, 0.65f, 0.95f, 1.0f));
+            ImGui::TextUnformatted("TopOpt");
+            ImGui::PopStyleColor();
+        }
         ImGui::SameLine(0.0f, 6.0f);
         ImGui::TextColored(ImVec4(0.40f, 0.42f, 0.48f, 1.0f), "|");
         ImGui::SameLine(0.0f, 6.0f);
@@ -889,10 +1009,13 @@ void Application::drawMenuBar() {
         float barW = ImGui::GetWindowWidth();
         float rightTextW = 90.0f;
         ImGui::SameLine(barW - rightTextW);
-        if (isExecuting_) {
-            ImGui::TextColored(ImVec4(0.45f, 0.75f, 0.50f, 1.0f), "Running");
-        } else {
-            ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "Ready");
+        {
+            ScopedFont smallFont(smallFont_);
+            if (isExecuting_) {
+                ImGui::TextColored(ImVec4(0.45f, 0.75f, 0.50f, 1.0f), "Running");
+            } else {
+                ImGui::TextColored(ImVec4(0.50f, 0.52f, 0.58f, 1.0f), "Ready");
+            }
         }
 
         ImGui::EndMenuBar();
@@ -1082,6 +1205,7 @@ void Application::drawLeftToolbar() {
 void Application::drawStatusBar() {
     ImGui::Separator();
     ImGui::BeginChild("StatusBar", ImVec2(0, 30), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
+    ScopedFont smallFont(smallFont_);
 
     // Left: node/connection counts
     ImGui::TextColored(ImVec4(0.62f, 0.64f, 0.70f, 1.0f),

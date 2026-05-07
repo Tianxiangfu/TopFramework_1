@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Tutorial home, lesson entry, and case-selection first pass
+- Tutorial home, lesson entry, and workspace visual polish for teaching use
 
 ## Last Completed
 
@@ -19,11 +19,12 @@
 - Added lesson metadata and integrated one-click loading for the existing cantilever example
 - Added a `Lesson` tab inside the workspace for course context
 - Verified the project still builds with `cmake --build --preset debug`
+- Added a three-level UI font hierarchy with title/body/small text sizing while keeping the current dark theme
 
 ## Next Step
 
-- Manually validate the tutorial home flow in the running application
-- Decide whether to activate more example cases now or build the lesson-content panel further first
+- Manually validate the updated typography in the tutorial home and workspace
+- Decide whether to build layout presets next or continue filling lesson content first
 
 ## Notes
 

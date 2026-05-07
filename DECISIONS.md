@@ -31,3 +31,11 @@ Use this file to record important planning and design decisions that should surv
 - The tutorial home can still present the intended course structure immediately.
 - Only the cantilever lesson is loadable in this pass.
 - Additional lesson projects can be activated incrementally without redesigning the home screen.
+
+### 2026-05-07 - Keep the current theme and improve typography first
+
+- Decision: Do not replace the existing dark theme yet; improve readability first by introducing title/body/small font hierarchy and safer font loading fallback.
+- Why: The current UI weakness is primarily visual hierarchy and oversized uniform text, not the base color theme itself.
+- Consequence:
+- Theme-color refactoring is deferred.
+- Future visual polish should build on this font hierarchy instead of scaling the whole window font uniformly.
