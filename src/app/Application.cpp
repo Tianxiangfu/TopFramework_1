@@ -1205,29 +1205,31 @@ void Application::drawLeftToolbar() {
 void Application::drawStatusBar() {
     ImGui::Separator();
     ImGui::BeginChild("StatusBar", ImVec2(0, 30), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
-    ScopedFont smallFont(smallFont_);
+    {
+        ScopedFont smallFont(smallFont_);
 
-    // Left: node/connection counts
-    ImGui::TextColored(ImVec4(0.62f, 0.64f, 0.70f, 1.0f),
-        "Nodes: %d  |  Connections: %d",
-        nodeEditor_->nodeCount(),
-        nodeEditor_->connectionCount());
+        // Left: node/connection counts
+        ImGui::TextColored(ImVec4(0.62f, 0.64f, 0.70f, 1.0f),
+            "Nodes: %d  |  Connections: %d",
+            nodeEditor_->nodeCount(),
+            nodeEditor_->connectionCount());
 
-    // Center: current file
-    if (!currentFilePath_.empty()) {
-        ImGui::SameLine(ImGui::GetWindowWidth() * 0.35f);
-        size_t pos = currentFilePath_.find_last_of("/\\");
-        std::string fname = (pos != std::string::npos)
-            ? currentFilePath_.substr(pos + 1) : currentFilePath_;
-        ImGui::TextColored(ImVec4(0.50f, 0.65f, 0.85f, 1.0f), "%s", fname.c_str());
+        // Center: current file
+        if (!currentFilePath_.empty()) {
+            ImGui::SameLine(ImGui::GetWindowWidth() * 0.35f);
+            size_t pos = currentFilePath_.find_last_of("/\\");
+            std::string fname = (pos != std::string::npos)
+                ? currentFilePath_.substr(pos + 1) : currentFilePath_;
+            ImGui::TextColored(ImVec4(0.50f, 0.65f, 0.85f, 1.0f), "%s", fname.c_str());
+        }
+
+        // Right: tool + version
+        ImGui::SameLine(ImGui::GetWindowWidth() - 220);
+        const char* toolNames[] = { "Select", "Zoom", "Rotate", "Camera" };
+        ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Tool: %s", toolNames[(int)activeTool_]);
+        ImGui::SameLine(ImGui::GetWindowWidth() - 100);
+        ImGui::TextColored(ImVec4(0.45f, 0.47f, 0.52f, 1.0f), "v0.1.0");
     }
-
-    // Right: tool + version
-    ImGui::SameLine(ImGui::GetWindowWidth() - 220);
-    const char* toolNames[] = { "Select", "Zoom", "Rotate", "Camera" };
-    ImGui::TextColored(ImVec4(0.55f, 0.60f, 0.70f, 1.0f), "Tool: %s", toolNames[(int)activeTool_]);
-    ImGui::SameLine(ImGui::GetWindowWidth() - 100);
-    ImGui::TextColored(ImVec4(0.45f, 0.47f, 0.52f, 1.0f), "v0.1.0");
 
     ImGui::EndChild();
 }
