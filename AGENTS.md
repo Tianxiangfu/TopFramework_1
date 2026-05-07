@@ -75,6 +75,7 @@ Session rules:
 
 - At the start of a new work session, read `TODO.md`, `STATUS.md`, `KNOWN_ISSUES.md`, and `DECISIONS.md` first.
 - At the end of any substantial work, update the relevant tracking files before commit/push.
+- After every repository update that changes tracked files, automatically run `cmake --preset release-gpu` and `cmake --build --preset release-gpu` before commit/push, and treat a failed GPU Release build as a blocker.
 - Do not put temporary progress logs into `AGENTS.md`; keep `AGENTS.md` for stable process rules only.
 - Use `STATUS.md` for current execution state, not long-term roadmap items.
 
