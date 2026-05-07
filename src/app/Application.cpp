@@ -264,30 +264,30 @@ void Application::run() {
 void Application::buildTutorialCases() {
     tutorialCases_.clear();
     tutorialCases_.push_back({
-        "Cantilever Beam",
-        "Run a complete GPU-ready topology optimization case.",
-        "Intro",
+        u8"\u60ac\u81c2\u6881\u62d3\u6251\u4f18\u5316",
+        u8"\u8fd0\u884c\u4e00\u4e2a\u5b8c\u6574\u7684\u3001\u652f\u6301 GPU \u7684\u62d3\u6251\u4f18\u5316\u6559\u5b66\u6848\u4f8b\u3002",
+        u8"\u5165\u95e8",
         "examples/cantilever_gpu_test.topopt",
-        "Understand the standard domain-material-load-SIMP-density workflow.",
-        "Watch the density evolution, volume fraction, and the final load path.",
+        u8"\u7406\u89e3\u6807\u51c6\u7684\u8bbe\u8ba1\u57df\u3001\u6750\u6599\u3001\u8f7d\u8377\u3001SIMP \u4f18\u5316\u548c\u5bc6\u5ea6\u7ed3\u679c\u8f93\u51fa\u6d41\u7a0b\u3002",
+        u8"\u91cd\u70b9\u89c2\u5bdf\u5bc6\u5ea6\u6f14\u5316\u3001\u4f53\u79ef\u5206\u6570\u53d8\u5316\uff0c\u4ee5\u53ca\u6700\u7ec8\u7ed3\u6784\u7684\u4f20\u529b\u8def\u5f84\u3002",
         !resolveProjectPath("examples/cantilever_gpu_test.topopt").empty()
     });
     tutorialCases_.push_back({
-        "MBB Beam",
-        "Symmetry-driven benchmark case for later lessons.",
-        "Intermediate",
+        u8"MBB \u6881\u57fa\u51c6\u6848\u4f8b",
+        u8"\u540e\u7eed\u8bfe\u7a0b\u4f1a\u52a0\u5165\u7684\u5bf9\u79f0\u6027\u57fa\u51c6\u6848\u4f8b\u3002",
+        u8"\u8fdb\u9636",
         "",
-        "Compare support conditions and symmetry effects in a canonical benchmark.",
-        "Focus on symmetry, support placement, and topology branching.",
+        u8"\u5bf9\u6bd4\u7ecf\u5178\u57fa\u51c6\u95ee\u9898\u4e2d\u7684\u652f\u6491\u65b9\u5f0f\u4e0e\u5bf9\u79f0\u6027\u5bf9\u7ed3\u679c\u7684\u5f71\u54cd\u3002",
+        u8"\u91cd\u70b9\u5173\u6ce8\u5bf9\u79f0\u8fb9\u754c\u3001\u652f\u6491\u4f4d\u7f6e\u548c\u62d3\u6251\u5206\u652f\u5f62\u6001\u3002",
         false
     });
     tutorialCases_.push_back({
-        "Intro FEA",
-        "Displacement-only lesson before optimization.",
-        "Intro",
+        u8"\u6709\u9650\u5143\u57fa\u7840\u5206\u6790",
+        u8"\u5728\u8fdb\u5165\u4f18\u5316\u4e4b\u524d\u5148\u5b66\u4e60\u4f4d\u79fb\u5206\u6790\u3002",
+        u8"\u5165\u95e8",
         "",
-        "Learn how supports, forces, and material settings affect the displacement field.",
-        "Observe the deformed shape and connect loading choices to response patterns.",
+        u8"\u5b66\u4e60\u652f\u6491\u3001\u8f7d\u8377\u548c\u6750\u6599\u53c2\u6570\u5982\u4f55\u5f71\u54cd\u7ed3\u6784\u4f4d\u79fb\u573a\u3002",
+        u8"\u91cd\u70b9\u89c2\u5bdf\u53d8\u5f62\u5f62\u6001\uff0c\u5e76\u628a\u8f7d\u8377\u8bbe\u7f6e\u548c\u54cd\u5e94\u7ed3\u679c\u5bf9\u5e94\u8d77\u6765\u3002",
         false
     });
 }
@@ -328,7 +328,7 @@ bool Application::openTutorialCase(int caseIndex) {
     const TutorialCase& tutorialCase = tutorialCases_[caseIndex];
     const std::string resolved = resolveProjectPath(tutorialCase.relativeProjectPath);
     if (resolved.empty()) {
-        Logger::instance().warn("Tutorial case is not available yet: " + tutorialCase.title);
+        Logger::instance().warn(std::string(u8"\u8bfe\u7a0b\u6848\u4f8b\u6682\u672a\u5f00\u653e: ") + tutorialCase.title);
         return false;
     }
 
@@ -337,7 +337,7 @@ bool Application::openTutorialCase(int caseIndex) {
     }
 
     activeTutorialCaseIndex_ = caseIndex;
-    Logger::instance().info("Opened tutorial case: " + tutorialCase.title);
+    Logger::instance().info(std::string(u8"\u5df2\u6253\u5f00\u8bfe\u7a0b\u6848\u4f8b: ") + tutorialCase.title);
     return true;
 }
 
@@ -356,29 +356,29 @@ void Application::drawTutorialHome() {
         IM_COL32(16, 18, 22, 255),
         IM_COL32(20, 24, 32, 255));
 
-    ImGui::TextColored(ImVec4(0.55f, 0.78f, 0.98f, 1.0f), "Topology Optimization Course Studio");
+    ImGui::TextColored(ImVec4(0.55f, 0.78f, 0.98f, 1.0f), u8"\u62d3\u6251\u4f18\u5316\u8bfe\u7a0b\u5de5\u4f5c\u53f0");
     ImGui::SetWindowFontScale(1.35f);
-    ImGui::TextUnformatted("Start with a guided lesson or open the full workspace.");
+    ImGui::TextUnformatted(u8"\u4f60\u53ef\u4ee5\u5148\u4ece\u6559\u5b66\u6848\u4f8b\u5f00\u59cb\uff0c\u4e5f\u53ef\u4ee5\u76f4\u63a5\u8fdb\u5165\u5b8c\u6574\u5de5\u4f5c\u533a\u3002");
     ImGui::SetWindowFontScale(1.0f);
     ImGui::Spacing();
     ImGui::TextColored(
         ImVec4(0.72f, 0.75f, 0.82f, 1.0f),
-        "This build already runs topology optimization examples. Phase 1 now focuses on teaching-friendly entry flow.");
+        u8"\u5f53\u524d\u7248\u672c\u5df2\u7ecf\u53ef\u4ee5\u8fd0\u884c\u62d3\u6251\u4f18\u5316\u6848\u4f8b\u3002Phase 1 \u7684\u91cd\u70b9\u662f\u628a\u5165\u53e3\u6539\u9020\u6210\u9002\u5408\u6559\u5b66\u7684\u5f62\u5f0f\u3002");
     ImGui::Spacing();
 
-    if (ImGui::Button("Open Existing Project", ImVec2(220, 0))) {
+    if (ImGui::Button(u8"\u6253\u5f00\u5df2\u6709\u5de5\u7a0b", ImVec2(220, 0))) {
         activeTutorialCaseIndex_ = -1;
         openProject();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Open any .topopt project from disk");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", u8"\u4ece\u78c1\u76d8\u6253\u5f00\u4efb\u610f .topopt \u5de5\u7a0b");
     ImGui::SameLine();
-    if (ImGui::Button("Enter Blank Workspace", ImVec2(220, 0))) {
+    if (ImGui::Button(u8"\u8fdb\u5165\u7a7a\u767d\u5de5\u4f5c\u533a", ImVec2(220, 0))) {
         newProject();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Skip the lesson flow and edit the graph directly");
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", u8"\u8df3\u8fc7\u6559\u5b66\u5165\u53e3\uff0c\u76f4\u63a5\u7f16\u8f91\u8282\u70b9\u56fe");
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Guided Lessons");
+    ImGui::SeparatorText(u8"\u6559\u5b66\u6848\u4f8b");
 
     const float gap = 14.0f;
     const float availW = ImGui::GetContentRegionAvail().x;
@@ -399,17 +399,17 @@ void Application::drawTutorialHome() {
         ImGui::TextColored(ImVec4(0.67f, 0.70f, 0.76f, 1.0f), "%s", tutorialCase.subtitle.c_str());
         ImGui::Spacing();
         ImGui::Separator();
-        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), "Goal");
+        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
         ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
         ImGui::Spacing();
-        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), "Observe");
+        ImGui::TextColored(ImVec4(0.86f, 0.88f, 0.92f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
         ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
         ImGui::Dummy(ImVec2(0, 8));
 
         if (!tutorialCase.available) {
             ImGui::BeginDisabled();
         }
-        if (ImGui::Button(tutorialCase.available ? "Start Lesson" : "Preparing", ImVec2(-1, 0))) {
+        if (ImGui::Button(tutorialCase.available ? u8"\u5f00\u59cb\u5b66\u4e60" : u8"\u51c6\u5907\u4e2d", ImVec2(-1, 0))) {
             openTutorialCase(i);
         }
         if (!tutorialCase.available) {
@@ -419,10 +419,10 @@ void Application::drawTutorialHome() {
     }
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Current Phase 1 Definition");
+    ImGui::SeparatorText(u8"\u5f53\u524d\u9636\u6bb5\u8bf4\u660e");
     ImGui::TextWrapped(
-        "This screen is the first tutorial-oriented layer: home entry, case selection, and lesson context. "
-        "Workflow guidance and parameter explanations will follow in later phases.");
+        "%s",
+        u8"\u8fd9\u4e2a\u9996\u9875\u662f\u6559\u7a0b\u5316\u6539\u9020\u7684\u7b2c\u4e00\u5c42\uff1a\u8bfe\u7a0b\u5165\u53e3\u3001\u6848\u4f8b\u9009\u62e9\u548c\u8bfe\u7a0b\u8bf4\u660e\u4e0a\u4e0b\u6587\u3002\u540e\u7eed\u9636\u6bb5\u4f1a\u7ee7\u7eed\u8865\u5145\u6d41\u7a0b\u5f15\u5bfc\u548c\u53c2\u6570\u89e3\u91ca\u3002");
 
     ImGui::EndChild();
     ImGui::PopStyleVar();
@@ -498,7 +498,7 @@ void Application::drawWorkspace() {
                             ImGui::EndTabItem();
                         }
                         if (ImGui::BeginTabItem("Console")) {
-                            ImGui::TextColored(ImVec4(0.42f, 0.42f, 0.53f, 0.7f), "Console output");
+                            ImGui::TextColored(ImVec4(0.42f, 0.42f, 0.53f, 0.7f), u8"\u63a7\u5236\u53f0\u8f93\u51fa");
                             ImGui::EndTabItem();
                         }
                         ImGui::EndTabBar();
@@ -637,7 +637,7 @@ void Application::drawWorkspace() {
 
 void Application::drawLessonTab() const {
     if (activeTutorialCaseIndex_ < 0 || activeTutorialCaseIndex_ >= static_cast<int>(tutorialCases_.size())) {
-        ImGui::TextDisabled("Open a guided lesson to view course notes.");
+        ImGui::TextDisabled("%s", u8"\u6253\u5f00\u4e00\u4e2a\u6559\u5b66\u6848\u4f8b\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u8bfe\u7a0b\u8bf4\u660e\u3002");
         return;
     }
 
@@ -648,17 +648,17 @@ void Application::drawLessonTab() const {
     ImGui::Spacing();
     ImGui::TextWrapped("%s", tutorialCase.subtitle.c_str());
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), "Learning Goal");
+    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u5b66\u4e60\u76ee\u6807");
     ImGui::TextWrapped("%s", tutorialCase.objective.c_str());
     ImGui::Spacing();
-    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), "What To Observe");
+    ImGui::TextColored(ImVec4(0.84f, 0.86f, 0.90f, 1.0f), u8"\u89c2\u5bdf\u91cd\u70b9");
     ImGui::TextWrapped("%s", tutorialCase.observation.c_str());
     ImGui::Spacing();
     ImGui::Separator();
-    ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.78f, 1.0f), "Suggested student flow");
-    ImGui::BulletText("Inspect the domain and supports first.");
-    ImGui::BulletText("Run the graph and watch the density playback.");
-    ImGui::BulletText("Compare volume fraction, objective, and final topology shape.");
+    ImGui::TextColored(ImVec4(0.68f, 0.72f, 0.78f, 1.0f), u8"\u5efa\u8bae\u5b66\u4e60\u6b65\u9aa4");
+    ImGui::BulletText("%s", u8"\u5148\u89c2\u5bdf\u8bbe\u8ba1\u57df\u3001\u652f\u6491\u548c\u8f7d\u8377\u8bbe\u7f6e\u3002");
+    ImGui::BulletText("%s", u8"\u8fd0\u884c\u8282\u70b9\u56fe\uff0c\u67e5\u770b\u5bc6\u5ea6\u52a8\u753b\u64ad\u653e\u8fc7\u7a0b\u3002");
+    ImGui::BulletText("%s", u8"\u6bd4\u8f83\u4f53\u79ef\u5206\u6570\u3001\u76ee\u6807\u51fd\u6570\u548c\u6700\u7ec8\u62d3\u6251\u5f62\u6001\u3002");
 }
 
 void Application::shutdown() {
@@ -828,11 +828,11 @@ void Application::drawMenuBar() {
         }
 
         if (ImGui::BeginMenu("Course")) {
-            if (ImGui::MenuItem("Tutorial Home")) {
+            if (ImGui::MenuItem(u8"\u6559\u7a0b\u9996\u9875")) {
                 activeScreen_ = AppScreen::TutorialHome;
             }
             if (activeTutorialCaseIndex_ >= 0 &&
-                ImGui::MenuItem("Reload Active Lesson")) {
+                ImGui::MenuItem(u8"\u91cd\u65b0\u52a0\u8f7d\u5f53\u524d\u8bfe\u7a0b\u6848\u4f8b")) {
                 openTutorialCase(activeTutorialCaseIndex_);
             }
             ImGui::EndMenu();
@@ -910,8 +910,8 @@ void Application::drawToolbar() {
     ImGui::BeginChild("Toolbar", ImVec2(0, toolbarH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
 
     // --- File group ---
-    if (ImGui::Button("Home")) { activeScreen_ = AppScreen::TutorialHome; }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Return to the lesson home screen");
+    if (ImGui::Button(u8"\u9996\u9875")) { activeScreen_ = AppScreen::TutorialHome; }
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", u8"\u8fd4\u56de\u8bfe\u7a0b\u9996\u9875");
     ImGui::SameLine();
     if (ImGui::Button("New")) { newProject(); }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("New Project (Ctrl+N)");
