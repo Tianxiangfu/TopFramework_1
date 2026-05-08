@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Phase 1 checklist cleanup and remaining lesson-content work
+- Phase 2 planning and workflow breakdown
 
 ## Last Completed
 
@@ -21,11 +21,12 @@
 - Verified the project still builds with `cmake --build --preset debug`
 - Added a three-level UI font hierarchy with title/body/small text sizing while keeping the current dark theme
 - Marked confirmed Phase 0 and Phase 1 items as complete in `TODO.md`
+- Split Phase 2 into an ordered implementation sequence
 
 ## Next Step
 
-- Validate the remaining tutorial workflow gaps, especially file open/save and drag-drop coverage
-- Continue filling the missing Phase 1 course cases
+- Start Phase 2 step 2.1: define the workflow state model
+- Decide which existing nodes map into the first wizard path
 
 ## Notes
 
