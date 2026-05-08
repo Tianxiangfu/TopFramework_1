@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Tutorial home, lesson entry, and workspace visual polish for teaching use
+- Phase 1 checklist cleanup and remaining lesson-content work
 
 ## Last Completed
 
@@ -20,11 +20,12 @@
 - Added a `Lesson` tab inside the workspace for course context
 - Verified the project still builds with `cmake --build --preset debug`
 - Added a three-level UI font hierarchy with title/body/small text sizing while keeping the current dark theme
+- Marked confirmed Phase 0 and Phase 1 items as complete in `TODO.md`
 
 ## Next Step
 
-- Manually validate the updated typography in the tutorial home and workspace
-- Decide whether to build layout presets next or continue filling lesson content first
+- Validate the remaining tutorial workflow gaps, especially file open/save and drag-drop coverage
+- Continue filling the missing Phase 1 course cases
 
 ## Notes
 
