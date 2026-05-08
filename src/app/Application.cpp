@@ -59,6 +59,36 @@ std::string windowsFontPath(const char* fileName) {
     return baseDir + "\\Fonts\\" + fileName;
 }
 
+ImVec4 workflowStatusColor(WorkflowStepStatus status) {
+    switch (status) {
+    case WorkflowStepStatus::NotStarted:
+        return ImVec4(0.42f, 0.45f, 0.50f, 1.0f);
+    case WorkflowStepStatus::Pending:
+        return ImVec4(0.84f, 0.70f, 0.28f, 1.0f);
+    case WorkflowStepStatus::Completed:
+        return ImVec4(0.34f, 0.74f, 0.48f, 1.0f);
+    case WorkflowStepStatus::ConfigurationError:
+        return ImVec4(0.88f, 0.38f, 0.38f, 1.0f);
+    }
+
+    return ImVec4(0.65f, 0.68f, 0.74f, 1.0f);
+}
+
+const char* workflowStatusTextZh(WorkflowStepStatus status) {
+    switch (status) {
+    case WorkflowStepStatus::NotStarted:
+        return u8"\u672a\u5f00\u59cb";
+    case WorkflowStepStatus::Pending:
+        return u8"\u5f85\u5b8c\u6210";
+    case WorkflowStepStatus::Completed:
+        return u8"\u5df2\u5b8c\u6210";
+    case WorkflowStepStatus::ConfigurationError:
+        return u8"\u914d\u7f6e\u5f02\u5e38";
+    }
+
+    return u8"\u672a\u77e5";
+}
+
 } // namespace
 
 // Global app pointer for GLFW callbacks (single instance expected)
@@ -527,6 +557,7 @@ void Application::drawTutorialHome() {
 }
 
 void Application::drawWorkspace() {
+    updateTutorialWorkflowState();
     drawToolbar();
 
     float statusH  = 34.f;
@@ -583,6 +614,10 @@ void Application::drawWorkspace() {
                     if (ImGui::BeginTabBar("BrowserTabs")) {
                         if (activeTutorialCaseIndex_ >= 0 && ImGui::BeginTabItem("Lesson")) {
                             drawLessonTab();
+                            ImGui::EndTabItem();
+                        }
+                        if (ImGui::BeginTabItem(u8"\u6d41\u7a0b")) {
+                            drawWorkflowTab();
                             ImGui::EndTabItem();
                         }
                         if (ImGui::BeginTabItem("Browse")) {
@@ -778,6 +813,216 @@ void Application::drawLessonTab() const {
     ImGui::BulletText("%s", u8"\u5148\u89c2\u5bdf\u8bbe\u8ba1\u57df\u3001\u652f\u6491\u548c\u8f7d\u8377\u8bbe\u7f6e\u3002");
     ImGui::BulletText("%s", u8"\u8fd0\u884c\u8282\u70b9\u56fe\uff0c\u67e5\u770b\u5bc6\u5ea6\u52a8\u753b\u64ad\u653e\u8fc7\u7a0b\u3002");
     ImGui::BulletText("%s", u8"\u6bd4\u8f83\u4f53\u79ef\u5206\u6570\u3001\u76ee\u6807\u51fd\u6570\u548c\u6700\u7ec8\u62d3\u6251\u5f62\u6001\u3002");
+}
+
+void Application::drawWorkflowTab() {
+    {
+        ScopedFont titleFont(titleFont_);
+        ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), u8"\u6559\u5b66\u6d41\u7a0b");
+    }
+    ImGui::SameLine();
+    {
+        ScopedFont smallFont(smallFont_);
+        ImGui::TextColored(
+            ImVec4(0.45f, 0.48f, 0.54f, 1.0f),
+            "%d / %d",
+            static_cast<int>(tutorialWorkflow_.completedRequiredStepCount()),
+            static_cast<int>(tutorialWorkflow_.requiredStepCount()));
+    }
+
+    ImGui::Spacing();
+    ImGui::TextWrapped(
+        "%s",
+        u8"\u8fd9\u91cc\u4f1a\u6309\u7167\u6559\u5b66\u987a\u5e8f\u5c55\u793a\u5f53\u524d\u6848\u4f8b\u7684\u5b8c\u6210\u8def\u5f84\u3002\u7b2c\u4e00\u7248\u5148\u663e\u793a\u6b65\u9aa4\u9aa8\u67b6\u4e0e\u72b6\u6001\uff0c\u540e\u7eed\u4f1a\u518d\u63a5\u5165\u81ea\u52a8\u68c0\u67e5\u3002");
+
+    ImGui::Spacing();
+    ImGui::Separator();
+
+    if (tutorialWorkflow_.hasBlockingIssues()) {
+        ImGui::TextColored(
+            ImVec4(0.88f, 0.38f, 0.38f, 1.0f),
+            "%s",
+            u8"\u5f53\u524d\u6d41\u7a0b\u4e2d\u5b58\u5728\u914d\u7f6e\u5f02\u5e38\u6b65\u9aa4\uff0c\u540e\u7eed\u9762\u677f\u4f1a\u5728\u8fd9\u91cc\u7ed9\u51fa\u5177\u4f53\u4fee\u590d\u63d0\u793a\u3002");
+    } else {
+        ImGui::TextColored(
+            ImVec4(0.66f, 0.70f, 0.76f, 1.0f),
+            "%s",
+            u8"\u5f53\u524d\u9ed8\u8ba4\u72b6\u6001\u662f\uff1a\u7b2c 1 \u6b65\u4e3a\u201c\u5f85\u5b8c\u6210\u201d\uff0c\u540e\u7eed\u6b65\u9aa4\u968f\u6d41\u7a0b\u9010\u6b65\u63a8\u8fdb\u3002");
+    }
+
+    ImGui::Spacing();
+
+    for (std::size_t i = 0; i < tutorialWorkflow_.stepCount(); ++i) {
+        const WorkflowStep* step = tutorialWorkflow_.stepAt(i);
+        if (!step) {
+            continue;
+        }
+
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.12f, 0.13f, 0.16f, 1.0f));
+        ImGui::BeginChild("WorkflowStepCard", ImVec2(0, 126), ImGuiChildFlags_Border);
+        ImGui::PopStyleColor();
+
+        ImDrawList* dl = ImGui::GetWindowDrawList();
+        ImVec2 cardMin = ImGui::GetWindowPos();
+        ImVec2 cardMax = ImGui::GetWindowPos() + ImGui::GetWindowSize();
+        dl->AddRectFilled(
+            cardMin,
+            ImVec2(cardMin.x + 5.0f, cardMax.y),
+            ImGui::ColorConvertFloat4ToU32(workflowStatusColor(step->status)));
+
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextColored(
+                ImVec4(0.52f, 0.70f, 0.94f, 1.0f),
+                "%s %d",
+                u8"\u6b65\u9aa4",
+                static_cast<int>(i + 1));
+        }
+        ImGui::SameLine();
+        ImGui::TextColored(workflowStatusColor(step->status), "[%s]", workflowStatusTextZh(step->status));
+
+        {
+            ScopedFont titleFont(titleFont_);
+            ImGui::TextWrapped("%s", step->title.c_str());
+        }
+
+        {
+            ScopedFont smallFont(smallFont_);
+            ImGui::TextWrapped("%s", step->description.c_str());
+        }
+
+        if (!step->requiredNodeTypes.empty()) {
+            ImGui::Spacing();
+            {
+                ScopedFont smallFont(smallFont_);
+                ImGui::TextColored(ImVec4(0.72f, 0.75f, 0.82f, 1.0f), "%s", u8"\u5173\u952e\u8282\u70b9");
+            }
+
+            for (std::size_t nodeIndex = 0; nodeIndex < step->requiredNodeTypes.size(); ++nodeIndex) {
+                if (nodeIndex > 0) {
+                    ImGui::SameLine(0.0f, 6.0f);
+                }
+                ImGui::TextColored(
+                    ImVec4(0.60f, 0.64f, 0.70f, 1.0f),
+                    "%s",
+                    step->requiredNodeTypes[nodeIndex].c_str());
+            }
+        }
+
+        if (!step->issues.empty()) {
+            ImGui::Spacing();
+            {
+                ScopedFont smallFont(smallFont_);
+                ImGui::TextColored(ImVec4(0.88f, 0.38f, 0.38f, 1.0f), "%s", u8"\u5f02\u5e38");
+            }
+            for (const WorkflowIssue& issue : step->issues) {
+                ImGui::BulletText("%s", issue.message.c_str());
+            }
+        }
+
+        ImGui::EndChild();
+        ImGui::PopID();
+        ImGui::Dummy(ImVec2(0, 6));
+    }
+}
+
+void Application::updateTutorialWorkflowState() {
+    tutorialWorkflow_.reset();
+    if (!nodeEditor_) {
+        return;
+    }
+
+    const auto& nodes = nodeEditor_->nodes();
+    auto hasNodeType = [&](std::initializer_list<const char*> typeNames) {
+        for (const NodeInstance& node : nodes) {
+            for (const char* typeName : typeNames) {
+                if (node.typeName == typeName) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    };
+
+    const bool hasDomain = hasNodeType({"domain-box", "domain-lshape", "domain-from-mesh", "domain-import"});
+    const bool hasMaterial = hasNodeType({"fea-material"});
+    const bool hasSupport = hasNodeType({"fea-fixed-support", "fea-displacement-bc"});
+    const bool hasLoad = hasNodeType({"fea-point-force", "fea-pressure-load", "fea-body-force"});
+    const bool hasLoadCase = hasNodeType({"fea-load-case"});
+    const bool hasSolver = hasNodeType({"fea-solver", "topo-simp", "topo-beso"});
+    const bool hasOptimizer = hasNodeType({"topo-simp", "topo-beso"});
+    const bool hasResultsNode = hasNodeType({
+        "output-display", "output-viewer", "output-export",
+        "post-density-view", "post-extract-field", "post-convergence", "post-export"
+    });
+
+    if (hasDomain) {
+        tutorialWorkflow_.setStepStatus(WorkflowStepId::GeometryDomain, WorkflowStepStatus::Completed);
+    }
+
+    if (hasMaterial) {
+        tutorialWorkflow_.setStepStatus(WorkflowStepId::Material, WorkflowStepStatus::Completed);
+    }
+
+    if (hasSupport && hasLoad && hasLoadCase) {
+        tutorialWorkflow_.setStepStatus(WorkflowStepId::BoundaryConditions, WorkflowStepStatus::Completed);
+    } else if (hasSupport || hasLoad || hasLoadCase) {
+        std::vector<WorkflowIssue> issues;
+        if (!hasSupport) {
+            issues.push_back({"missing-support", u8"\u7f3a\u5c11\u652f\u6491\u6761\u4ef6\u8282\u70b9"});
+        }
+        if (!hasLoad) {
+            issues.push_back({"missing-load", u8"\u7f3a\u5c11\u8f7d\u8377\u8282\u70b9"});
+        }
+        if (!hasLoadCase) {
+            issues.push_back({"missing-loadcase", u8"\u7f3a\u5c11 `fea-load-case` \u8282\u70b9"});
+        }
+        tutorialWorkflow_.setStepIssues(WorkflowStepId::BoundaryConditions, std::move(issues));
+    }
+
+    if (hasSolver) {
+        tutorialWorkflow_.setStepStatus(WorkflowStepId::Solver, WorkflowStepStatus::Completed);
+    }
+
+    if (hasOptimizer) {
+        std::vector<WorkflowIssue> issues;
+        for (NodeInstance& node : nodeEditor_->nodes()) {
+            if (node.typeName != "topo-simp" && node.typeName != "topo-beso") {
+                continue;
+            }
+
+            const ParamDef* pVolFrac = findNodeParam(node, "VolFrac");
+            const ParamDef* pPenalty = findNodeParam(node, "Penalty");
+            const ParamDef* pFilterR = findNodeParam(node, "FilterR");
+
+            if (pVolFrac && (pVolFrac->floatVal <= 0.0f || pVolFrac->floatVal >= 1.0f)) {
+                issues.push_back({"invalid-volfrac", u8"`VolFrac` \u5e94\u5728 0 \u4e0e 1 \u4e4b\u95f4"});
+            }
+            if (pPenalty && pPenalty->floatVal < 1.0f) {
+                issues.push_back({"invalid-penalty", u8"`Penalty` \u4e0d\u5e94\u5c0f\u4e8e 1"});
+            }
+            if (pFilterR && pFilterR->floatVal <= 0.0f) {
+                issues.push_back({"invalid-filterr", u8"`FilterR` \u5fc5\u987b\u5927\u4e8e 0"});
+            }
+        }
+
+        if (issues.empty()) {
+            tutorialWorkflow_.setStepStatus(WorkflowStepId::OptimizationParameters, WorkflowStepStatus::Completed);
+        } else {
+            tutorialWorkflow_.setStepIssues(WorkflowStepId::OptimizationParameters, std::move(issues));
+        }
+    }
+
+    if (hasResultsNode) {
+        tutorialWorkflow_.setStepStatus(WorkflowStepId::Results, WorkflowStepStatus::Completed);
+    } else if (hasSolver) {
+        tutorialWorkflow_.setStepIssues(
+            WorkflowStepId::Results,
+            {{"missing-results-view", u8"\u5df2\u6709\u6c42\u89e3\u94fe\u8def\uff0c\u4f46\u7f3a\u5c11\u7ed3\u679c\u5c55\u793a\u6216\u5bfc\u51fa\u8282\u70b9"}});
+    }
+
+    tutorialWorkflow_.refreshProgression();
 }
 
 void Application::shutdown() {

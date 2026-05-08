@@ -54,9 +54,11 @@ private:
     void drawTutorialHome();
     void drawWorkspace();
     void drawLessonTab() const;
+    void drawWorkflowTab();
     void handleKeyboardShortcuts();
     void drawDensityPlaybackControls();
     void updateDensityPlayback();
+    void updateTutorialWorkflowState();
     ParamDef* findNodeParam(NodeInstance& node, const std::string& name) const;
     const ParamDef* findNodeParam(const NodeInstance& node, const std::string& name) const;
     void buildTutorialCases();

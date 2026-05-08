@@ -216,6 +216,10 @@ void TutorialWorkflow::setStepIssues(WorkflowStepId id, std::vector<WorkflowIssu
         : WorkflowStepStatus::ConfigurationError;
 }
 
+void TutorialWorkflow::refreshProgression() {
+    primeFirstPendingStep(steps_);
+}
+
 std::vector<WorkflowStep>& TutorialWorkflow::steps() {
     return steps_;
 }

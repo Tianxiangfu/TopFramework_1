@@ -47,3 +47,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Phase 2.2 should render from the workflow model instead of hardcoding step order in the panel.
 - Phase 2.3 and 2.4 should update step status and issues through the workflow model instead of inventing a second validation structure.
+
+### 2026-05-08 - First workflow panel version should reflect the current graph immediately
+
+- Decision: The first Phase 2.2 workflow panel should scan the currently loaded graph and mark steps completed automatically, instead of forcing all lesson cases to start from step 1.
+- Why: The repository already includes complete teaching examples, and showing them as entirely unfinished would be misleading.
+- Consequence:
+- Opening a complete example should show most or all core steps as completed.
+- Empty or partial graphs should still surface pending or configuration-error states.

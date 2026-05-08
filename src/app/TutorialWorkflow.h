@@ -60,6 +60,7 @@ public:
     void setStepStatus(WorkflowStepId id, WorkflowStepStatus status);
     void clearStepIssues(WorkflowStepId id);
     void setStepIssues(WorkflowStepId id, std::vector<WorkflowIssue> issues);
+    void refreshProgression();
 
     std::vector<WorkflowStep>& steps();
     const std::vector<WorkflowStep>& steps() const;

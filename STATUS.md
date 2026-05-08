@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Phase 2.2 wizard-panel groundwork on top of the workflow state model
+- Phase 2.3 workflow validation rules and error-state integration
 
 ## Last Completed
 
@@ -23,11 +23,12 @@
 - Marked confirmed Phase 0 and Phase 1 items as complete in `TODO.md`
 - Split Phase 2 into an ordered implementation sequence
 - Implemented the Phase 2.1 workflow state model in code and marked `TODO.md` accordingly
+- Added the Phase 2.2 workflow panel tab and automatic step completion for the current lesson graph
 
 ## Next Step
 
-- Start Phase 2 step 2.2: render the ordered workflow steps in a dedicated panel
-- Reuse the new workflow model as the only source of step ordering and state labels
+- Start Phase 2 step 2.3: strengthen graph validation beyond node presence
+- Add clearer step-specific configuration errors for incomplete lesson graphs
 
 ## Notes
 
