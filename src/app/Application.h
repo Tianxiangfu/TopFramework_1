@@ -1,4 +1,6 @@
 #pragma once
+#include "TutorialWorkflow.h"
+
 #include <string>
 #include <vector>
 
@@ -90,6 +92,7 @@ private:
     std::string currentFilePath_;
     std::vector<TutorialCase> tutorialCases_;
     int activeTutorialCaseIndex_ = -1;
+    TutorialWorkflow tutorialWorkflow_;
 
     // Tool state
     Tool activeTool_ = Tool::Select;

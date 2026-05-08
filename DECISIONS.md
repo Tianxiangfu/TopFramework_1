@@ -39,3 +39,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Theme-color refactoring is deferred.
 - Future visual polish should build on this font hierarchy instead of scaling the whole window font uniformly.
+
+### 2026-05-08 - Use a standalone workflow-state model as the base for Phase 2
+
+- Decision: Implement Phase 2.1 as a dedicated `TutorialWorkflow` model that owns ordered lesson steps, step status, required node types, and per-step issues.
+- Why: The wizard panel, validation layer, and execution gating all need the same source of truth; embedding this logic directly into UI code would create rework.
+- Consequence:
+- Phase 2.2 should render from the workflow model instead of hardcoding step order in the panel.
+- Phase 2.3 and 2.4 should update step status and issues through the workflow model instead of inventing a second validation structure.

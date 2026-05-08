@@ -113,6 +113,7 @@ static std::string resolveProjectPath(const std::string& relativePath) {
 
 Application::Application() {
     g_appInstance = this;
+    tutorialWorkflow_ = TutorialWorkflow::makeStandardTopologyWorkflow();
 }
 
 Application::~Application() {
@@ -387,6 +388,7 @@ bool Application::loadProjectFromPath(const std::string& path) {
     activeScreen_ = AppScreen::Workspace;
     cmdHistory_->clear();
     cmdHistory_->markClean();
+    tutorialWorkflow_.reset();
     prevSelectedNodeId_ = -1;
     prevParamHash_ = 0;
     densityPlayback_ = {};
@@ -808,6 +810,7 @@ void Application::newProject() {
     activeScreen_ = AppScreen::Workspace;
     activeTutorialCaseIndex_ = -1;
     currentFilePath_.clear();
+    tutorialWorkflow_.reset();
     prevSelectedNodeId_ = -1;
     prevParamHash_ = 0;
     densityPlayback_ = {};
