@@ -55,3 +55,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Opening a complete example should show most or all core steps as completed.
 - Empty or partial graphs should still surface pending or configuration-error states.
+
+### 2026-05-09 - Phase 2.3 validates graph connectivity, not just node presence
+
+- Decision: The first workflow-validation pass should require key nodes to be connected into the expected graph chain before a step is marked complete.
+- Why: Node-presence-only checks were too weak and incorrectly treated partial graphs as completed workflows.
+- Consequence:
+- Domain, material, boundary-condition, solver, optimizer, and result steps now depend on actual incoming or outgoing connections.
+- Workflow errors should mention missing `FEMesh`, material, load/support, load-case, result-view, or invalid SIMP parameters directly in the panel.

@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <cstdlib>
+#include <initializer_list>
 #include <filesystem>
 #include <functional>
 
@@ -934,55 +935,232 @@ void Application::updateTutorialWorkflowState() {
     }
 
     const auto& nodes = nodeEditor_->nodes();
-    auto hasNodeType = [&](std::initializer_list<const char*> typeNames) {
-        for (const NodeInstance& node : nodes) {
-            for (const char* typeName : typeNames) {
-                if (node.typeName == typeName) {
-                    return true;
-                }
+    const auto& connections = nodeEditor_->connections();
+
+    auto typeMatches = [](const std::string& actual, std::initializer_list<const char*> typeNames) {
+        for (const char* typeName : typeNames) {
+            if (actual == typeName) {
+                return true;
             }
         }
         return false;
     };
 
-    const bool hasDomain = hasNodeType({"domain-box", "domain-lshape", "domain-from-mesh", "domain-import"});
-    const bool hasMaterial = hasNodeType({"fea-material"});
-    const bool hasSupport = hasNodeType({"fea-fixed-support", "fea-displacement-bc"});
-    const bool hasLoad = hasNodeType({"fea-point-force", "fea-pressure-load", "fea-body-force"});
-    const bool hasLoadCase = hasNodeType({"fea-load-case"});
-    const bool hasSolver = hasNodeType({"fea-solver", "topo-simp", "topo-beso"});
-    const bool hasOptimizer = hasNodeType({"topo-simp", "topo-beso"});
-    const bool hasResultsNode = hasNodeType({
+    auto findNodeById = [&](int nodeId) -> const NodeInstance* {
+        for (const NodeInstance& node : nodes) {
+            if (node.id == nodeId) {
+                return &node;
+            }
+        }
+        return nullptr;
+    };
+
+    auto findNodesByTypes = [&](std::initializer_list<const char*> typeNames) {
+        std::vector<const NodeInstance*> matched;
+        for (const NodeInstance& node : nodes) {
+            if (typeMatches(node.typeName, typeNames)) {
+                matched.push_back(&node);
+            }
+        }
+        return matched;
+    };
+
+    auto inputPortIndex = [&](const NodeInstance& node, const char* inputId) {
+        const NodeTypeDef* def = NodeRegistry::instance().findType(node.typeName);
+        if (!def) {
+            return -1;
+        }
+
+        for (std::size_t i = 0; i < def->inputs.size(); ++i) {
+            if (def->inputs[i].id == inputId) {
+                return static_cast<int>(i);
+            }
+        }
+        return -1;
+    };
+
+    auto hasConnectedInput = [&](const NodeInstance& node, const char* inputId) {
+        const int inputIdx = inputPortIndex(node, inputId);
+        if (inputIdx < 0) {
+            return false;
+        }
+
+        for (const Connection& conn : connections) {
+            if (conn.endNodeId == node.id && conn.endPortIdx == inputIdx) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto hasConnectedInputFromTypes = [&](const NodeInstance& node, const char* inputId,
+                                          std::initializer_list<const char*> sourceTypes) {
+        const int inputIdx = inputPortIndex(node, inputId);
+        if (inputIdx < 0) {
+            return false;
+        }
+
+        for (const Connection& conn : connections) {
+            if (conn.endNodeId != node.id || conn.endPortIdx != inputIdx) {
+                continue;
+            }
+
+            const NodeInstance* srcNode = findNodeById(conn.startNodeId);
+            if (srcNode && typeMatches(srcNode->typeName, sourceTypes)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto hasOutgoingConnectionToTypes = [&](const NodeInstance& node,
+                                            std::initializer_list<const char*> targetTypes) {
+        for (const Connection& conn : connections) {
+            if (conn.startNodeId != node.id) {
+                continue;
+            }
+
+            const NodeInstance* dstNode = findNodeById(conn.endNodeId);
+            if (dstNode && typeMatches(dstNode->typeName, targetTypes)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    auto anyNodeSatisfies = [&](const std::vector<const NodeInstance*>& matchedNodes, auto&& predicate) {
+        for (const NodeInstance* node : matchedNodes) {
+            if (node && predicate(*node)) {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    const auto domainNodes = findNodesByTypes({"domain-box", "domain-lshape", "domain-from-mesh", "domain-import"});
+    const auto materialNodes = findNodesByTypes({"fea-material"});
+    const auto supportNodes = findNodesByTypes({"fea-fixed-support", "fea-displacement-bc"});
+    const auto loadNodes = findNodesByTypes({"fea-point-force", "fea-pressure-load", "fea-body-force"});
+    const auto loadCaseNodes = findNodesByTypes({"fea-load-case"});
+    const auto solverNodes = findNodesByTypes({"fea-solver", "topo-simp", "topo-beso"});
+    const auto optimizerNodes = findNodesByTypes({"topo-simp", "topo-beso"});
+    const auto resultNodes = findNodesByTypes({
         "output-display", "output-viewer", "output-export",
         "post-density-view", "post-extract-field", "post-convergence", "post-export"
     });
 
-    if (hasDomain) {
+    const bool hasDomain = !domainNodes.empty();
+    const bool hasMaterial = !materialNodes.empty();
+    const bool hasSupport = !supportNodes.empty();
+    const bool hasLoad = !loadNodes.empty();
+    const bool hasLoadCase = !loadCaseNodes.empty();
+    const bool hasSolver = !solverNodes.empty();
+    const bool hasOptimizer = !optimizerNodes.empty();
+    const bool hasResultsNode = !resultNodes.empty();
+
+    const bool validDomainChain = anyNodeSatisfies(
+        domainNodes,
+        [&](const NodeInstance& node) {
+            return hasOutgoingConnectionToTypes(
+                node,
+                {"fea-fixed-support", "fea-displacement-bc", "fea-point-force", "fea-pressure-load",
+                 "fea-body-force", "fea-solver", "topo-simp", "topo-beso", "topo-passive-region",
+                 "post-density-view", "post-export"});
+        });
+
+    if (validDomainChain) {
         tutorialWorkflow_.setStepStatus(WorkflowStepId::GeometryDomain, WorkflowStepStatus::Completed);
+    } else if (hasDomain) {
+        tutorialWorkflow_.setStepIssues(
+            WorkflowStepId::GeometryDomain,
+            {{"unused-domain", u8"\u5df2\u6709\u8bbe\u8ba1\u57df\u8282\u70b9\uff0c\u4f46\u8fd8\u6ca1\u6709\u63a5\u5165\u652f\u6491\u3001\u8f7d\u8377\u6216\u6c42\u89e3\u94fe\u8def"}});
     }
 
-    if (hasMaterial) {
+    const bool validMaterialChain = anyNodeSatisfies(
+        materialNodes,
+        [&](const NodeInstance& node) {
+            return hasOutgoingConnectionToTypes(node, {"fea-solver", "topo-simp", "topo-beso"});
+        });
+
+    if (validMaterialChain) {
         tutorialWorkflow_.setStepStatus(WorkflowStepId::Material, WorkflowStepStatus::Completed);
+    } else if (hasMaterial) {
+        tutorialWorkflow_.setStepIssues(
+            WorkflowStepId::Material,
+            {{"unused-material", u8"\u5df2\u6709 `fea-material` \u8282\u70b9\uff0c\u4f46\u8fd8\u6ca1\u6709\u63a5\u5165\u6c42\u89e3\u5668\u6216\u4f18\u5316\u5668"}});
     }
 
-    if (hasSupport && hasLoad && hasLoadCase) {
+    const bool validSupportChain = anyNodeSatisfies(
+        supportNodes,
+        [&](const NodeInstance& node) {
+            return hasConnectedInputFromTypes(node, "femesh", {"domain-box", "domain-lshape", "domain-from-mesh", "domain-import"}) &&
+                   hasOutgoingConnectionToTypes(node, {"fea-load-case"});
+        });
+    const bool validLoadChain = anyNodeSatisfies(
+        loadNodes,
+        [&](const NodeInstance& node) {
+            return hasConnectedInputFromTypes(node, "femesh", {"domain-box", "domain-lshape", "domain-from-mesh", "domain-import"}) &&
+                   hasOutgoingConnectionToTypes(node, {"fea-load-case"});
+        });
+    const bool validLoadCaseChain = anyNodeSatisfies(
+        loadCaseNodes,
+        [&](const NodeInstance& node) {
+            const bool hasSupportInput =
+                hasConnectedInputFromTypes(node, "bc0", {"fea-fixed-support", "fea-displacement-bc"}) ||
+                hasConnectedInputFromTypes(node, "bc1", {"fea-fixed-support", "fea-displacement-bc"}) ||
+                hasConnectedInputFromTypes(node, "bc2", {"fea-fixed-support", "fea-displacement-bc"}) ||
+                hasConnectedInputFromTypes(node, "bc3", {"fea-fixed-support", "fea-displacement-bc"});
+            const bool hasLoadInput =
+                hasConnectedInputFromTypes(node, "bc0", {"fea-point-force", "fea-pressure-load", "fea-body-force"}) ||
+                hasConnectedInputFromTypes(node, "bc1", {"fea-point-force", "fea-pressure-load", "fea-body-force"}) ||
+                hasConnectedInputFromTypes(node, "bc2", {"fea-point-force", "fea-pressure-load", "fea-body-force"}) ||
+                hasConnectedInputFromTypes(node, "bc3", {"fea-point-force", "fea-pressure-load", "fea-body-force"});
+            return hasSupportInput && hasLoadInput;
+        });
+
+    if (validSupportChain && validLoadChain && validLoadCaseChain) {
         tutorialWorkflow_.setStepStatus(WorkflowStepId::BoundaryConditions, WorkflowStepStatus::Completed);
     } else if (hasSupport || hasLoad || hasLoadCase) {
         std::vector<WorkflowIssue> issues;
         if (!hasSupport) {
             issues.push_back({"missing-support", u8"\u7f3a\u5c11\u652f\u6491\u6761\u4ef6\u8282\u70b9"});
+        } else if (!validSupportChain) {
+            issues.push_back({"unconnected-support", u8"\u652f\u6491\u8282\u70b9\u9700\u8981\u540c\u65f6\u63a5\u4e0a `FEMesh` \u548c `fea-load-case`"});
         }
         if (!hasLoad) {
             issues.push_back({"missing-load", u8"\u7f3a\u5c11\u8f7d\u8377\u8282\u70b9"});
+        } else if (!validLoadChain) {
+            issues.push_back({"unconnected-load", u8"\u8f7d\u8377\u8282\u70b9\u9700\u8981\u540c\u65f6\u63a5\u4e0a `FEMesh` \u548c `fea-load-case`"});
         }
         if (!hasLoadCase) {
             issues.push_back({"missing-loadcase", u8"\u7f3a\u5c11 `fea-load-case` \u8282\u70b9"});
+        } else if (!validLoadCaseChain) {
+            issues.push_back({"empty-loadcase", u8"`fea-load-case` \u9700\u8981\u540c\u65f6\u63a5\u5165\u652f\u6491\u548c\u8f7d\u8377"});
         }
         tutorialWorkflow_.setStepIssues(WorkflowStepId::BoundaryConditions, std::move(issues));
     }
 
-    if (hasSolver) {
+    const bool validSolverChain = anyNodeSatisfies(
+        solverNodes,
+        [&](const NodeInstance& node) {
+            const bool hasFemeshInput = hasConnectedInputFromTypes(
+                node, "femesh", {"domain-box", "domain-lshape", "domain-from-mesh", "domain-import", "topo-passive-region"});
+            const bool hasMaterialInput = hasConnectedInputFromTypes(node, "material", {"fea-material"});
+            const bool hasLoadCaseInput =
+                hasConnectedInputFromTypes(node, "lc0", {"fea-load-case"}) ||
+                hasConnectedInputFromTypes(node, "lc1", {"fea-load-case"}) ||
+                hasConnectedInputFromTypes(node, "lc2", {"fea-load-case"});
+            return hasFemeshInput && hasMaterialInput && hasLoadCaseInput;
+        });
+
+    if (validSolverChain) {
         tutorialWorkflow_.setStepStatus(WorkflowStepId::Solver, WorkflowStepStatus::Completed);
+    } else if (hasSolver) {
+        std::vector<WorkflowIssue> issues;
+        issues.push_back({"missing-femesh", u8"\u6c42\u89e3\u5668\u6216\u4f18\u5316\u5668\u672a\u63a5\u5165 `FEMesh`"});
+        issues.push_back({"missing-material-link", u8"\u6c42\u89e3\u5668\u6216\u4f18\u5316\u5668\u672a\u63a5\u5165 `fea-material`"});
+        issues.push_back({"missing-loadcase-link", u8"\u6c42\u89e3\u5668\u6216\u4f18\u5316\u5668\u672a\u63a5\u5165 `fea-load-case`"});
+        tutorialWorkflow_.setStepIssues(WorkflowStepId::Solver, std::move(issues));
     }
 
     if (hasOptimizer) {
@@ -990,6 +1168,18 @@ void Application::updateTutorialWorkflowState() {
         for (NodeInstance& node : nodeEditor_->nodes()) {
             if (node.typeName != "topo-simp" && node.typeName != "topo-beso") {
                 continue;
+            }
+
+            if (!hasConnectedInput(node, "femesh")) {
+                issues.push_back({"missing-topo-femesh", u8"\u4f18\u5316\u5668\u672a\u63a5\u5165 `FEMesh`"});
+            }
+            if (!hasConnectedInput(node, "material")) {
+                issues.push_back({"missing-topo-material", u8"\u4f18\u5316\u5668\u672a\u63a5\u5165 `fea-material`"});
+            }
+            if (!hasConnectedInput(node, "lc0") &&
+                !hasConnectedInput(node, "lc1") &&
+                !hasConnectedInput(node, "lc2")) {
+                issues.push_back({"missing-topo-loadcase", u8"\u4f18\u5316\u5668\u672a\u63a5\u5165 `fea-load-case`"});
             }
 
             const ParamDef* pVolFrac = findNodeParam(node, "VolFrac");
@@ -1014,9 +1204,39 @@ void Application::updateTutorialWorkflowState() {
         }
     }
 
-    if (hasResultsNode) {
+    const bool validResultsChain = anyNodeSatisfies(
+        resultNodes,
+        [&](const NodeInstance& node) {
+            if (node.typeName == "post-density-view") {
+                return hasConnectedInput(node, "density") && hasConnectedInput(node, "femesh");
+            }
+            if (node.typeName == "post-extract-field") {
+                return hasConnectedInput(node, "result");
+            }
+            if (node.typeName == "post-convergence") {
+                return hasConnectedInput(node, "density");
+            }
+            if (node.typeName == "post-export") {
+                return hasConnectedInput(node, "femesh") ||
+                       hasConnectedInput(node, "density") ||
+                       hasConnectedInput(node, "result");
+            }
+            if (node.typeName == "output-viewer") {
+                return hasConnectedInput(node, "mesh") || hasConnectedInput(node, "field");
+            }
+            if (node.typeName == "output-display" || node.typeName == "output-export") {
+                return hasConnectedInput(node, "data");
+            }
+            return false;
+        });
+
+    if (validResultsChain) {
         tutorialWorkflow_.setStepStatus(WorkflowStepId::Results, WorkflowStepStatus::Completed);
-    } else if (hasSolver) {
+    } else if (hasResultsNode) {
+        tutorialWorkflow_.setStepIssues(
+            WorkflowStepId::Results,
+            {{"unconnected-results", u8"\u7ed3\u679c\u8282\u70b9\u5df2\u5b58\u5728\uff0c\u4f46\u8fd8\u6ca1\u6709\u63a5\u4e0a\u5bc6\u5ea6\u3001\u7ed3\u679c\u6216\u7f51\u683c\u8f93\u51fa"}});
+    } else if (validSolverChain || hasOptimizer) {
         tutorialWorkflow_.setStepIssues(
             WorkflowStepId::Results,
             {{"missing-results-view", u8"\u5df2\u6709\u6c42\u89e3\u94fe\u8def\uff0c\u4f46\u7f3a\u5c11\u7ed3\u679c\u5c55\u793a\u6216\u5bfc\u51fa\u8282\u70b9"}});

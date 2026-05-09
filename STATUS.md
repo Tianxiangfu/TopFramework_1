@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-- Active phase: `Phase 1 - Make It Usable As A Tutorial App`
+- Active phase: `Phase 2 - Improve Core Learning Flow`
 
 ## In Progress
 
-- Phase 2.3 workflow validation rules and error-state integration
+- Phase 2.5 standard tutorial-graph generation planning
 
 ## Last Completed
 
@@ -24,11 +24,12 @@
 - Split Phase 2 into an ordered implementation sequence
 - Implemented the Phase 2.1 workflow state model in code and marked `TODO.md` accordingly
 - Added the Phase 2.2 workflow panel tab and automatic step completion for the current lesson graph
+- Upgraded workflow checks to validate key graph connections and issue specific configuration errors
 
 ## Next Step
 
-- Start Phase 2 step 2.3: strengthen graph validation beyond node presence
-- Add clearer step-specific configuration errors for incomplete lesson graphs
+- Start Phase 2 step 2.5: auto-generate a standard lesson graph for the cantilever workflow
+- Decide how generated graphs should coexist with manually edited lesson projects
 
 ## Notes
 
