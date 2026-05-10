@@ -49,6 +49,12 @@ private:
     bool active_ = false;
 };
 
+struct TutorialExecutionGate {
+    bool blocked = false;
+    std::string summary;
+    std::vector<std::string> details;
+};
+
 bool fileExists(const std::string& path) {
     std::error_code ec;
     return std::filesystem::exists(path, ec);
@@ -192,6 +198,51 @@ void ensureConnection(NodeEditor& editor, int startNodeId, int startPortIdx, int
     Connection conn = makeConnection(startNodeId, startPortIdx, endNodeId, endPortIdx);
     conn.id = editor.nextConnId();
     editor.addConnectionDirect(conn);
+}
+
+TutorialExecutionGate buildTutorialExecutionGate(const TutorialWorkflow& workflow, bool tutorialCaseActive) {
+    TutorialExecutionGate gate;
+    if (!tutorialCaseActive) {
+        return gate;
+    }
+
+    if (workflow.hasBlockingIssues()) {
+        gate.blocked = true;
+        gate.summary = u8"\u5f53\u524d\u6559\u7a0b\u6848\u4f8b\u4ecd\u6709\u914d\u7f6e\u5f02\u5e38\uff0c\u9700\u5148\u4fee\u590d\u540e\u624d\u80fd\u6267\u884c\u3002";
+        for (const WorkflowStep& step : workflow.steps()) {
+            if (step.status != WorkflowStepStatus::ConfigurationError) {
+                continue;
+            }
+            for (const WorkflowIssue& issue : step.issues) {
+                gate.details.push_back(step.title + ": " + issue.message);
+            }
+        }
+        return gate;
+    }
+
+    if (!workflow.allRequiredStepsComplete()) {
+        gate.blocked = true;
+        gate.summary = u8"\u5f53\u524d\u6559\u7a0b\u6848\u4f8b\u8fd8\u6709\u5173\u952e\u6b65\u9aa4\u672a\u5b8c\u6210\uff0c\u6682\u4e0d\u5141\u8bb8\u6267\u884c\u3002";
+        for (const WorkflowStep& step : workflow.steps()) {
+            if (!step.required || step.status == WorkflowStepStatus::Completed) {
+                continue;
+            }
+            gate.details.push_back(step.title);
+        }
+    }
+
+    return gate;
+}
+std::string makeTooltipText(const TutorialExecutionGate& gate, const char* readyText) {
+    if (!gate.blocked) {
+        return readyText;
+    }
+
+    std::string tooltip = gate.summary;
+    for (const std::string& detail : gate.details) {
+        tooltip += "\n- " + detail;
+    }
+    return tooltip;
 }
 
 } // namespace
@@ -1041,6 +1092,9 @@ void Application::drawLessonTab() const {
 }
 
 void Application::drawWorkflowTab() {
+    const TutorialExecutionGate executionGate =
+        buildTutorialExecutionGate(tutorialWorkflow_, activeTutorialCaseIndex_ >= 0);
+
     {
         ScopedFont titleFont(titleFont_);
         ImGui::TextColored(ImVec4(0.55f, 0.70f, 0.92f, 1.0f), u8"\u6559\u5b66\u6d41\u7a0b");
@@ -1063,16 +1117,23 @@ void Application::drawWorkflowTab() {
     ImGui::Spacing();
     ImGui::Separator();
 
-    if (tutorialWorkflow_.hasBlockingIssues()) {
+    if (executionGate.blocked) {
         ImGui::TextColored(
-            ImVec4(0.88f, 0.38f, 0.38f, 1.0f),
+            tutorialWorkflow_.hasBlockingIssues()
+                ? ImVec4(0.88f, 0.38f, 0.38f, 1.0f)
+                : ImVec4(0.84f, 0.70f, 0.28f, 1.0f),
             "%s",
-            u8"\u5f53\u524d\u6d41\u7a0b\u4e2d\u5b58\u5728\u914d\u7f6e\u5f02\u5e38\u6b65\u9aa4\uff0c\u540e\u7eed\u9762\u677f\u4f1a\u5728\u8fd9\u91cc\u7ed9\u51fa\u5177\u4f53\u4fee\u590d\u63d0\u793a\u3002");
+            executionGate.summary.c_str());
+        for (const std::string& detail : executionGate.details) {
+            ImGui::BulletText("%s", detail.c_str());
+        }
     } else {
         ImGui::TextColored(
-            ImVec4(0.66f, 0.70f, 0.76f, 1.0f),
+            ImVec4(0.34f, 0.74f, 0.48f, 1.0f),
             "%s",
-            u8"\u5f53\u524d\u9ed8\u8ba4\u72b6\u6001\u662f\uff1a\u7b2c 1 \u6b65\u4e3a\u201c\u5f85\u5b8c\u6210\u201d\uff0c\u540e\u7eed\u6b65\u9aa4\u968f\u6d41\u7a0b\u9010\u6b65\u63a8\u8fdb\u3002");
+            activeTutorialCaseIndex_ >= 0
+                ? u8"\u5f53\u524d\u6559\u7a0b\u6848\u4f8b\u5df2\u6ee1\u8db3\u6267\u884c\u6761\u4ef6\uff0c\u53ef\u4ee5\u76f4\u63a5\u8fd0\u884c\u6216\u5355\u6b65\u6267\u884c\u3002"
+                : u8"\u5f53\u524d\u4e0d\u5728\u6559\u7a0b\u6848\u4f8b\u95e8\u7981\u6a21\u5f0f\u4e2d\uff0c\u6267\u884c\u5165\u53e3\u4fdd\u6301\u81ea\u7531\u3002");
     }
 
     ImGui::Spacing();
@@ -1721,6 +1782,15 @@ void Application::drawToolbar() {
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(10, 5));
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6, 6));
 
+    const TutorialExecutionGate executionGate =
+        buildTutorialExecutionGate(tutorialWorkflow_, activeTutorialCaseIndex_ >= 0);
+    const std::string runTooltip =
+        isExecuting_
+            ? std::string("Stop Execution")
+            : makeTooltipText(executionGate, "Run Node Graph");
+    const std::string stepTooltip =
+        makeTooltipText(executionGate, "Execute One Step");
+
     float toolbarH = 40.f;
     ImGui::BeginChild("Toolbar", ImVec2(0, toolbarH), ImGuiChildFlags_None, ImGuiWindowFlags_NoScrollbar);
 
@@ -1787,6 +1857,7 @@ void Application::drawToolbar() {
         }
         ImGui::PopStyleColor();
     } else {
+        if (executionGate.blocked) ImGui::BeginDisabled();
         ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.30f, 0.60f, 0.40f, 1.0f));
         if (ImGui::Button("Run")) {
             isExecuting_ = true;
@@ -1797,16 +1868,23 @@ void Application::drawToolbar() {
             densityPlayback_ = {};
         }
         ImGui::PopStyleColor();
+        if (executionGate.blocked) ImGui::EndDisabled();
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip(isExecuting_ ? "Stop Execution" : "Run Node Graph");
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("%s", runTooltip.c_str());
+    }
     ImGui::SameLine();
+    if (executionGate.blocked) ImGui::BeginDisabled();
     if (ImGui::Button("Step")) {
         if (executor_) executor_->stepOne();
         prevSelectedNodeId_ = -1;
         prevParamHash_ = 0;
         densityPlayback_ = {};
     }
-    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Execute One Step");
+    if (executionGate.blocked) ImGui::EndDisabled();
+    if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
+        ImGui::SetTooltip("%s", stepTooltip.c_str());
+    }
     ImGui::SameLine();
     if (ImGui::Button("Reset")) {
         isExecuting_ = false;
@@ -1817,6 +1895,16 @@ void Application::drawToolbar() {
         densityPlayback_ = {};
     }
     if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reset Execution State");
+
+    if (activeTutorialCaseIndex_ >= 0 && executionGate.blocked) {
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::TextColored(
+            tutorialWorkflow_.hasBlockingIssues()
+                ? ImVec4(0.88f, 0.38f, 0.38f, 1.0f)
+                : ImVec4(0.84f, 0.70f, 0.28f, 1.0f),
+            "%s",
+            u8"\u8bf7\u5148\u5b8c\u6210\u6d41\u7a0b\u9762\u677f\u4e2d\u7684\u5173\u952e\u6b65\u9aa4");
+    }
 
     ImGui::EndChild();
     ImGui::Separator();

@@ -2,11 +2,11 @@
 
 ## Current Phase
 
-- Active phase: `Phase 2 - Improve Core Learning Flow`
+- Active phase: `Phase 3 - Upgrade Property Panel Into A Teaching Panel`
 
 ## In Progress
 
-- Phase 2.6 execution gating planning
+- Phase 3.1 teaching-side property-panel planning
 
 ## Last Completed
 
@@ -26,11 +26,12 @@
 - Added the Phase 2.2 workflow panel tab and automatic step completion for the current lesson graph
 - Upgraded workflow checks to validate key graph connections and issue specific configuration errors
 - Added a standard cantilever tutorial graph template so the lesson opens as a complete teaching case
+- Gated tutorial-case `Run` and `Step` execution until required workflow steps are complete
 
 ## Next Step
 
-- Start Phase 2 step 2.6: block execution until the key tutorial workflow steps are complete
-- Decide whether to surface a direct "rebuild tutorial graph" action in the workflow panel
+- Start Phase 3 step 3.1: turn the property panel into a teaching-facing parameter explanation panel
+- Decide which topology parameters should ship with inline Chinese explanations first
 
 ## Notes
 

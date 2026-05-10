@@ -71,3 +71,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Manual `Open Project` stays unchanged.
 - The tutorial home can rebuild the standard lesson graph whenever the cantilever case is opened.
+
+### 2026-05-10 - Execution gating applies only to tutorial cases
+
+- Decision: The `Run` and `Step` buttons should be blocked only when a tutorial case is active and its workflow is incomplete or invalid.
+- Why: Teaching cases need stronger guardrails, but manually opened projects should keep their current free-form editing and debugging behavior.
+- Consequence:
+- Tutorial cases now surface blocking reasons in both the workflow panel and the toolbar tooltip.
+- Manual `Open Project` and blank workspaces are not execution-gated by the tutorial workflow.
