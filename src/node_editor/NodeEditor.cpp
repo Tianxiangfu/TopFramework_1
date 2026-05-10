@@ -492,13 +492,14 @@ void NodeEditor::removeNode(int nodeId) {
 
 void NodeEditor::removeSelectedNodes() {
     int numSel = ImNodes::NumSelectedNodes();
-    if (numSel <= 0) return;
-    std::vector<int> selIds(numSel);
-    ImNodes::GetSelectedNodes(selIds.data());
-    for (int id : selIds) {
-        removeNode(id);
+    if (numSel > 0) {
+        std::vector<int> selIds(numSel);
+        ImNodes::GetSelectedNodes(selIds.data());
+        for (int id : selIds) {
+            removeNode(id);
+        }
+        ImNodes::ClearNodeSelection();
     }
-    ImNodes::ClearNodeSelection();
 
     // Also delete selected links
     int numLinks = ImNodes::NumSelectedLinks();
