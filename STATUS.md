@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Phase 2.5 standard tutorial-graph generation planning
+- Phase 2.6 execution gating planning
 
 ## Last Completed
 
@@ -25,11 +25,12 @@
 - Implemented the Phase 2.1 workflow state model in code and marked `TODO.md` accordingly
 - Added the Phase 2.2 workflow panel tab and automatic step completion for the current lesson graph
 - Upgraded workflow checks to validate key graph connections and issue specific configuration errors
+- Added a standard cantilever tutorial graph template so the lesson opens as a complete teaching case
 
 ## Next Step
 
-- Start Phase 2 step 2.5: auto-generate a standard lesson graph for the cantilever workflow
-- Decide how generated graphs should coexist with manually edited lesson projects
+- Start Phase 2 step 2.6: block execution until the key tutorial workflow steps are complete
+- Decide whether to surface a direct "rebuild tutorial graph" action in the workflow panel
 
 ## Notes
 

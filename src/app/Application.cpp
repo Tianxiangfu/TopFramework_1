@@ -90,6 +90,110 @@ const char* workflowStatusTextZh(WorkflowStepStatus status) {
     return u8"\u672a\u77e5";
 }
 
+ParamDef* findParam(NodeInstance& node, const char* name) {
+    for (auto& param : node.params) {
+        if (param.name == name) {
+            return &param;
+        }
+    }
+    return nullptr;
+}
+
+void setFloatParam(NodeInstance& node, const char* name, float value) {
+    if (ParamDef* param = findParam(node, name)) {
+        if (param->type == ParamType::Float) {
+            param->floatVal = value;
+        }
+    }
+}
+
+void setIntParam(NodeInstance& node, const char* name, int value) {
+    if (ParamDef* param = findParam(node, name)) {
+        if (param->type == ParamType::Int) {
+            param->intVal = value;
+        }
+    }
+}
+
+void setBoolParam(NodeInstance& node, const char* name, bool value) {
+    if (ParamDef* param = findParam(node, name)) {
+        if (param->type == ParamType::Bool) {
+            param->boolVal = value;
+        }
+    }
+}
+
+void setStringParam(NodeInstance& node, const char* name, const std::string& value) {
+    if (ParamDef* param = findParam(node, name)) {
+        if (param->type == ParamType::String) {
+            param->stringVal = value;
+        }
+    }
+}
+
+void setEnumParam(NodeInstance& node, const char* name, int value) {
+    if (ParamDef* param = findParam(node, name)) {
+        if (param->type == ParamType::Enum) {
+            if (param->enumOptions.empty()) {
+                param->enumIndex = 0;
+            } else {
+                param->enumIndex = std::clamp(
+                    value,
+                    0,
+                    static_cast<int>(param->enumOptions.size()) - 1);
+            }
+        }
+    }
+}
+
+Connection makeConnection(int startNodeId, int startPortIdx, int endNodeId, int endPortIdx) {
+    Connection conn;
+    conn.startNodeId = startNodeId;
+    conn.startPortIdx = startPortIdx;
+    conn.endNodeId = endNodeId;
+    conn.endPortIdx = endPortIdx;
+    return conn;
+}
+
+int createNodeDirect(NodeEditor& editor, const char* typeName, float x, float y) {
+    const NodeTypeDef* def = NodeRegistry::instance().findType(typeName);
+    if (!def) {
+        return -1;
+    }
+
+    NodeInstance node;
+    node.id = editor.nextNodeId();
+    node.typeName = typeName;
+    node.label = def->displayName;
+    node.posX = x;
+    node.posY = y;
+    node.params = def->defaultParams;
+    editor.addNodeDirect(node);
+    return node.id;
+}
+
+bool hasConnection(const NodeEditor& editor, int startNodeId, int startPortIdx, int endNodeId, int endPortIdx) {
+    for (const Connection& conn : editor.connections()) {
+        if (conn.startNodeId == startNodeId &&
+            conn.startPortIdx == startPortIdx &&
+            conn.endNodeId == endNodeId &&
+            conn.endPortIdx == endPortIdx) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void ensureConnection(NodeEditor& editor, int startNodeId, int startPortIdx, int endNodeId, int endPortIdx) {
+    if (hasConnection(editor, startNodeId, startPortIdx, endNodeId, endPortIdx)) {
+        return;
+    }
+
+    Connection conn = makeConnection(startNodeId, startPortIdx, endNodeId, endPortIdx);
+    conn.id = editor.nextConnId();
+    editor.addConnectionDirect(conn);
+}
+
 } // namespace
 
 // Global app pointer for GLFW callbacks (single instance expected)
@@ -398,6 +502,120 @@ void Application::buildTutorialCases() {
     });
 }
 
+void Application::buildStandardCantileverGraph() {
+    if (!nodeEditor_) {
+        return;
+    }
+
+    nodeEditor_->clear();
+
+    const float leftX = 120.0f;
+    const float topY = 140.0f;
+
+    const int domainId = createNodeDirect(*nodeEditor_, "domain-box", leftX, topY);
+    const int materialId = createNodeDirect(*nodeEditor_, "fea-material", leftX, topY + 180.0f);
+    const int supportId = createNodeDirect(*nodeEditor_, "fea-fixed-support", leftX, topY + 360.0f);
+    const int loadId = createNodeDirect(*nodeEditor_, "fea-point-force", leftX, topY + 540.0f);
+    const int loadCaseId = createNodeDirect(*nodeEditor_, "fea-load-case", leftX + 300.0f, topY + 450.0f);
+    const int optimizerId = createNodeDirect(*nodeEditor_, "topo-simp", leftX + 560.0f, topY + 260.0f);
+    const int densityViewId = createNodeDirect(*nodeEditor_, "post-density-view", leftX + 980.0f, topY + 250.0f);
+    const int convergenceId = createNodeDirect(*nodeEditor_, "post-convergence", leftX + 980.0f, topY + 430.0f);
+
+    if (domainId < 0 || materialId < 0 || supportId < 0 || loadId < 0 ||
+        loadCaseId < 0 || optimizerId < 0 || densityViewId < 0 || convergenceId < 0) {
+        Logger::instance().error("Failed to build the standard cantilever tutorial graph");
+        return;
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(domainId)) {
+        setFloatParam(*node, "LengthX", 12.0f);
+        setFloatParam(*node, "LengthY", 4.0f);
+        setFloatParam(*node, "LengthZ", 1.0f);
+        setIntParam(*node, "ElemsX", 60);
+        setIntParam(*node, "ElemsY", 20);
+        setIntParam(*node, "ElemsZ", 1);
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(materialId)) {
+        setFloatParam(*node, "E", 210000.0f);
+        setFloatParam(*node, "nu", 0.3f);
+        setFloatParam(*node, "Density", 7850.0f);
+        setStringParam(*node, "Name", "Steel");
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(supportId)) {
+        setEnumParam(*node, "SelectionMode", 0);
+        setEnumParam(*node, "Face", 0);
+        setBoolParam(*node, "FixX", true);
+        setBoolParam(*node, "FixY", true);
+        setBoolParam(*node, "FixZ", true);
+        setEnumParam(*node, "CoordAxis", 0);
+        setFloatParam(*node, "CoordMin", 0.0f);
+        setFloatParam(*node, "CoordMax", 0.0f);
+        setFloatParam(*node, "Tolerance", 1e-6f);
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(loadId)) {
+        setEnumParam(*node, "SelectionMode", 0);
+        setEnumParam(*node, "Face", 1);
+        setFloatParam(*node, "ForceX", 0.0f);
+        setFloatParam(*node, "ForceY", -1.0f);
+        setFloatParam(*node, "ForceZ", 0.0f);
+        setEnumParam(*node, "Distribution", 0);
+        setEnumParam(*node, "CoordAxis", 0);
+        setFloatParam(*node, "CoordMin", 0.0f);
+        setFloatParam(*node, "CoordMax", 0.0f);
+        setFloatParam(*node, "Tolerance", 1e-6f);
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(loadCaseId)) {
+        setStringParam(*node, "Name", "LC1");
+        setFloatParam(*node, "Weight", 1.0f);
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(optimizerId)) {
+        setEnumParam(*node, "Backend", 0);
+        setBoolParam(*node, "EnableGPU", true);
+        setBoolParam(*node, "FallbackToCPU", true);
+        setFloatParam(*node, "VolFrac", 0.5f);
+        setFloatParam(*node, "Penalty", 3.0f);
+        setFloatParam(*node, "FilterR", 1.5f);
+        setEnumParam(*node, "FilterType", 0);
+        setIntParam(*node, "MaxIter", 10);
+        setFloatParam(*node, "MinDensity", 0.001f);
+        setIntParam(*node, "SolverMaxIter", 200);
+        setFloatParam(*node, "SolverTol", 1e-4f);
+        setEnumParam(*node, "Objective", 0);
+        setStringParam(*node, "AmgXPath", "");
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(densityViewId)) {
+        setFloatParam(*node, "Threshold", 0.5f);
+        setIntParam(*node, "SmoothIter", 0);
+        setBoolParam(*node, "Animate", false);
+        setBoolParam(*node, "AutoPlay", true);
+        setBoolParam(*node, "Loop", false);
+        setFloatParam(*node, "FPS", 6.0f);
+        setIntParam(*node, "Frame", 0);
+    }
+
+    if (NodeInstance* node = nodeEditor_->findNode(convergenceId)) {
+        setBoolParam(*node, "ShowCompliance", true);
+        setBoolParam(*node, "ShowVolume", true);
+    }
+
+    ensureConnection(*nodeEditor_, domainId, 0, supportId, 0);
+    ensureConnection(*nodeEditor_, domainId, 0, loadId, 0);
+    ensureConnection(*nodeEditor_, supportId, 0, loadCaseId, 0);
+    ensureConnection(*nodeEditor_, loadId, 0, loadCaseId, 1);
+    ensureConnection(*nodeEditor_, domainId, 0, optimizerId, 0);
+    ensureConnection(*nodeEditor_, materialId, 0, optimizerId, 1);
+    ensureConnection(*nodeEditor_, loadCaseId, 0, optimizerId, 2);
+    ensureConnection(*nodeEditor_, optimizerId, 0, densityViewId, 0);
+    ensureConnection(*nodeEditor_, domainId, 0, densityViewId, 1);
+    ensureConnection(*nodeEditor_, optimizerId, 0, convergenceId, 0);
+}
+
 bool Application::loadProjectFromPath(const std::string& path) {
     if (path.empty()) {
         return false;
@@ -443,7 +661,13 @@ bool Application::openTutorialCase(int caseIndex) {
         return false;
     }
 
+    if (caseIndex == 0) {
+        buildStandardCantileverGraph();
+        Logger::instance().info(std::string(u8"\u5df2\u5957\u7528\u6807\u51c6\u6559\u5b66\u62d3\u6251\u56fe\u6a21\u677f"));
+    }
+
     activeTutorialCaseIndex_ = caseIndex;
+    updateTutorialWorkflowState();
     Logger::instance().info(std::string(u8"\u5df2\u6253\u5f00\u8bfe\u7a0b\u6848\u4f8b: ") + tutorialCase.title);
     return true;
 }

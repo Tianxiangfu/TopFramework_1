@@ -63,3 +63,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Domain, material, boundary-condition, solver, optimizer, and result steps now depend on actual incoming or outgoing connections.
 - Workflow errors should mention missing `FEMesh`, material, load/support, load-case, result-view, or invalid SIMP parameters directly in the panel.
+
+### 2026-05-10 - Auto-generate the standard cantilever tutorial graph
+
+- Decision: Tutorial-case loading should normalize the cantilever lesson into a canonical graph template before the workflow panel is refreshed.
+- Why: The tutorial experience should open in a complete, teachable state instead of depending on whatever was last saved in the sample file.
+- Consequence:
+- Manual `Open Project` stays unchanged.
+- The tutorial home can rebuild the standard lesson graph whenever the cantilever case is opened.

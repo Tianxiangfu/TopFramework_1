@@ -59,6 +59,7 @@ private:
     void drawDensityPlaybackControls();
     void updateDensityPlayback();
     void updateTutorialWorkflowState();
+    void buildStandardCantileverGraph();
     ParamDef* findNodeParam(NodeInstance& node, const std::string& name) const;
     const ParamDef* findNodeParam(const NodeInstance& node, const std::string& name) const;
     void buildTutorialCases();
