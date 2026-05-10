@@ -193,3 +193,9 @@
 - [ ] 完成收敛曲线和边界条件可视化
 
 达到这个里程碑后，这个项目就已经具备“课程演示软件”的基本形态了。
+
+## Phase 3 Detail Tracking
+
+- [x] 3.1 Add a teaching metadata layer and first-pass property-panel explanations for `topo-simp`.
+- [ ] 3.2 Expand teaching summaries to more lesson nodes and make long explanations easier to scan.
+- [ ] 3.3 Add workflow-aware experiment suggestions directly inside the property panel.

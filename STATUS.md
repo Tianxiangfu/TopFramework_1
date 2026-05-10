@@ -6,7 +6,7 @@
 
 ## In Progress
 
-- Phase 3.1 teaching-side property-panel planning
+- Phase 3.2 lesson-node teaching coverage planning
 
 ## Last Completed
 
@@ -27,11 +27,12 @@
 - Upgraded workflow checks to validate key graph connections and issue specific configuration errors
 - Added a standard cantilever tutorial graph template so the lesson opens as a complete teaching case
 - Gated tutorial-case `Run` and `Step` execution until required workflow steps are complete
+- Added a teaching metadata layer and first-pass Chinese explanations in the property panel for `topo-simp`
 
 ## Next Step
 
-- Start Phase 3 step 3.1: turn the property panel into a teaching-facing parameter explanation panel
-- Decide which topology parameters should ship with inline Chinese explanations first
+- Start Phase 3 step 3.2: expand teaching summaries to more lesson nodes and reduce panel clutter
+- Decide whether parameter explanations should stay always visible or become collapsible cards
 
 ## Notes
 

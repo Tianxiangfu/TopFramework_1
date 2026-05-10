@@ -79,3 +79,11 @@ Use this file to record important planning and design decisions that should surv
 - Consequence:
 - Tutorial cases now surface blocking reasons in both the workflow panel and the toolbar tooltip.
 - Manual `Open Project` and blank workspaces are not execution-gated by the tutorial workflow.
+
+### 2026-05-10 - Phase 3 starts with a metadata layer instead of a panel rewrite
+
+- Decision: The first teaching-panel pass should add a standalone node/parameter explanation dataset and render it above the existing property editor.
+- Why: Rewriting the whole property panel would create avoidable UI risk; a metadata layer gives immediate teaching value and is easy to expand node by node.
+- Consequence:
+- The current editing behavior stays intact.
+- `topo-simp` gets the first full Chinese explanation set, while other lesson nodes can be onboarded incrementally.
